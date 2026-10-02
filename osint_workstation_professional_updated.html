@@ -1,0 +1,2167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#090d16">
+    <meta name="description" content="Professional OSINT investigation workstation with embedded resource viewer and case evidence management.">
+    <title>OSINT Workstation</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-surface: #111827;
+            --bg-card: #1f293d;
+            --bg-card-hover: #2d374d;
+            --accent-cyan: #00f2fe;
+            --accent-blue: #4facfe;
+            --accent-purple: #7928ca;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #1f2937;
+            --sidebar-width: 280px;
+
+            /* Density Defaults (Comfortable) */
+            --spacing-sm: 8px;
+            --spacing-md: 14px;
+            --font-sm: 0.75rem;
+            --font-md: 0.9rem;
+
+            /* Flag Colors */
+            --flag-red: #ef4444;
+            --flag-orange: #f97316;
+            --flag-yellow: #eab308;
+            --flag-green: #22c55e;
+            --flag-blue: #3b82f6;
+            --flag-purple: #a855f7;
+            
+            /* Risk Colors */
+            --risk-high: #ef4444;
+            --risk-sensitive: #f97316;
+            --risk-standard: #22c55e;
+        }
+
+        /* Density Overrides */
+        body.density-compact {
+            --spacing-sm: 4px;
+            --spacing-md: 8px;
+            --font-sm: 0.7rem;
+            --font-md: 0.8rem;
+        }
+        body.density-large {
+            --spacing-sm: 12px;
+            --spacing-md: 18px;
+            --font-sm: 0.85rem;
+            --font-md: 1rem;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Professional polish and responsive behavior */
+        :focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
+        button { font: inherit; }
+        .tool-card { min-height: 176px; box-shadow: 0 8px 22px rgba(0,0,0,.12); }
+        .tool-card:hover { box-shadow: 0 12px 28px rgba(0,0,0,.22); }
+        .viewer-pane { min-width: 0; }
+        .viewer-header { min-height: 52px; }
+        .iframe-container { min-height: 240px; }
+        .viewer-empty {
+            position:absolute; inset:0; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; gap:10px; padding:28px;
+            color:#334155; text-align:center; background:#f8fafc; z-index:1;
+        }
+        .viewer-empty i { font-size:2rem; color:#64748b; }
+        .viewer-empty strong { font-size:1rem; }
+        .viewer-empty span { max-width:440px; font-size:.82rem; line-height:1.5; }
+        .viewer-empty.hidden { display:none; }
+        .viewer-pane.is-hidden { display:none !important; }
+        .tool-action-btn:focus-visible, .nav-item:focus-visible, .case-tab:focus-visible { outline-offset:3px; }
+        @media (max-width: 980px) {
+            :root { --sidebar-width: 220px; }
+            .content-area { min-width:0; }
+            .viewer-pane { min-width: 300px; }
+            .tool-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+        }
+        @media (max-width: 720px) {
+            body { height:auto; min-height:100vh; overflow:auto; }
+            .sidebar { width:64px; overflow:hidden; }
+            .brand-header { padding:14px; justify-content:center; }
+            .brand-header > div, .nav-section-title, .nav-item-left { font-size:0; }
+            .brand-header i { margin:0; }
+            .nav-item { justify-content:center; padding:12px 8px; }
+            .nav-item-left i { font-size:1rem; }
+            .nav-item .badge { display:none; }
+            .workspace { min-height:100vh; }
+            .content-area { flex-direction:column; overflow:visible; }
+            .tools-view, .case-studio-view { overflow:visible; padding:14px; }
+            .viewer-pane { min-height:420px; border-left:0; border-top:1px solid var(--border-color); }
+            .top-bar { padding:10px; }
+            .query-box { min-width:100%; }
+            .quick-actions { flex-wrap:wrap; }
+            .case-header { align-items:flex-start; gap:12px; flex-wrap:wrap; }
+            .case-tabs { overflow-x:auto; gap:8px; }
+            .case-tab { white-space:nowrap; }
+            .tool-grid { grid-template-columns:1fr; }
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--bg-surface);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            z-index: 10;
+            transition: width 0.3s ease;
+        }
+
+        .brand-header {
+            padding: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(135deg, rgba(0,242,254,0.1), rgba(121,40,202,0.1));
+        }
+
+        .brand-header i {
+            font-size: 1.8rem;
+            color: var(--accent-cyan);
+            margin-top: 4px;
+        }
+
+        .brand-header h1 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-subtext {
+            font-size: 0.7rem; 
+            color: var(--text-muted);
+            display: block;
+        }
+
+        .category-nav {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .nav-section-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin: 16px 10px 8px;
+            font-weight: 700;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--spacing-sm) var(--spacing-md);
+            margin-bottom: 4px;
+            border-radius: 8px;
+            color: var(--text-muted);
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: var(--font-md);
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background-color: var(--bg-card);
+            color: var(--text-main);
+        }
+
+        .nav-item.active {
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        .nav-item-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge {
+            background-color: rgba(0, 242, 254, 0.15);
+            color: var(--accent-cyan);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Main Workspace */
+        .workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background-color: var(--bg-surface);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .query-box {
+            flex: 1;
+            min-width: 260px;
+            position: relative;
+        }
+
+        .query-box i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--accent-cyan);
+        }
+
+        .query-input {
+            width: 100%;
+            padding: 10px 14px 10px 40px;
+            background-color: var(--bg-base);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-size: var(--font-md);
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        .query-input:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .view-controls select {
+            background-color: var(--bg-card);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            outline: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: #fff;
+            border: none;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.2s;
+        }
+
+        .btn:hover { opacity: 0.9; }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+        }
+
+        .btn-outline:hover { background-color: var(--bg-card); }
+
+        .btn-success { background: linear-gradient(135deg, #10b981, #059669); }
+        .btn-danger { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .tools-view {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        /* Enhanced Case Studio View */
+        .case-studio-view {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: none;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .case-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+
+        .case-tabs {
+            display: flex;
+            gap: 15px;
+            margin-bottom: -16px;
+        }
+
+        .case-tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            color: var(--text-muted);
+            border-bottom: 3px solid transparent;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .case-tab.active {
+            color: var(--accent-cyan);
+            border-bottom: 3px solid var(--accent-cyan);
+        }
+        .case-tab-content { display: none; }
+        .case-tab-content.active { display: flex; flex-direction: column; gap: 20px; }
+
+        .case-card-panel {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 18px;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .panel-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent-cyan);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .input-field {
+            background-color: var(--bg-base);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--text-main);
+            font-size: 0.88rem;
+            outline: none;
+        }
+        .input-field:focus { border-color: var(--accent-cyan); }
+        textarea.input-field { min-height: 70px; resize: vertical; }
+
+        /* OSINT Tool Cards */
+        .category-section { margin-bottom: 30px; display: none; }
+        .category-section.active { display: block; }
+
+        .category-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-main);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+        .category-title i { color: var(--accent-cyan); }
+        .category-desc { font-size: 0.85rem; color: var(--text-muted); margin: -5px 0 15px 0; }
+        .risk-warning {
+            background-color: rgba(239, 68, 68, 0.1);
+            border-left: 4px solid var(--risk-high);
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 0.85rem;
+            color: #fca5a5;
+        }
+
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 14px;
+        }
+
+        .tool-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 12px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .tool-card:hover { transform: translateY(-2px); border-color: var(--accent-cyan); }
+
+        .tool-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .tool-title { font-size: 0.95rem; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+        .tool-desc { font-size: var(--font-sm); color: var(--text-muted); line-height: 1.4; flex-grow: 1; }
+        
+        .tool-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            font-size: 0.7rem;
+            margin-top: 5px;
+        }
+        
+        .risk-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .risk-high { background-color: rgba(239,68,68,0.2); color: var(--risk-high); }
+        .risk-sensitive { background-color: rgba(249,115,22,0.2); color: var(--risk-sensitive); }
+        .risk-standard { background-color: rgba(34,197,94,0.2); color: var(--risk-standard); }
+
+        .tool-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--border-color);
+            padding-top: 10px;
+        }
+        
+        .tool-action-btn {
+            background: transparent;
+            border: none;
+            color: var(--accent-cyan);
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .tool-action-btn:hover { text-decoration: underline; }
+
+        /* Viewer Pane */
+        .viewer-pane {
+            flex: 1;
+            background-color: var(--bg-base);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .viewer-header {
+            background-color: var(--bg-surface);
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .viewer-url {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 60%;
+            background: var(--bg-base);
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        .iframe-container {
+            flex: 1;
+            position: relative;
+            background-color: #ffffff;
+        }
+        iframe { width: 100%; height: 100%; border: none; }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 100;
+            display: none; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background: var(--bg-surface); border: 1px solid var(--border-color);
+            border-radius: 12px; width: 450px; padding: 25px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .modal-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 10px;}
+        .modal-title.danger { color: var(--risk-high); }
+        .modal-body { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+        /* Utility classes */
+        .view-switcher { display: flex; gap: 6px; background-color: var(--bg-base); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color); }
+        .view-btn { padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; border: none; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; gap: 6px; }
+        .view-btn.active { background-color: var(--bg-card); color: var(--accent-cyan); font-weight: 600; }
+        
+        .flag-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+        .flag-red { background-color: rgba(239, 68, 68, 0.2); color: var(--flag-red); border: 1px solid var(--flag-red); }
+        .flag-orange { background-color: rgba(249, 115, 22, 0.2); color: var(--flag-orange); border: 1px solid var(--flag-orange); }
+        .flag-yellow { background-color: rgba(234, 179, 8, 0.2); color: var(--flag-yellow); border: 1px solid var(--flag-yellow); }
+        .flag-green { background-color: rgba(34, 197, 94, 0.2); color: var(--flag-green); border: 1px solid var(--flag-green); }
+        .flag-blue { background-color: rgba(59, 130, 246, 0.2); color: var(--flag-blue); border: 1px solid var(--flag-blue); }
+        .flag-purple { background-color: rgba(168, 85, 247, 0.2); color: var(--flag-purple); border: 1px solid var(--flag-purple); }
+
+        .evidence-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 10px; }
+        .evidence-table th, .evidence-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .evidence-table th { background-color: var(--bg-base); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
+
+
+        /* ===== In-App Viewer v2 ===== */
+        .viewer-pane { flex: 1.25; }
+        .viewer-header { flex-wrap: wrap; row-gap: 6px; }
+        .vh-left, .vh-right { display: flex; align-items: center; gap: 6px; }
+        .vh-left #viewerTitle { max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .viewer-url { flex: 1; min-width: 160px; max-width: none !important; color: var(--text-main); font-size: .8rem; outline: none; }
+        .viewer-url:focus { border-color: var(--accent-cyan); }
+        .viewer-progress { height: 3px; background: transparent; position: relative; overflow: hidden; flex-shrink: 0; }
+        .viewer-progress.on { background: rgba(0,242,254,.15); }
+        .viewer-progress.on::after { content:''; position:absolute; inset:0 auto 0 0; width:35%; background:linear-gradient(90deg,var(--accent-cyan),var(--accent-blue)); animation: vload 1.1s infinite ease-in-out; }
+        @keyframes vload { 0%{left:-35%} 100%{left:100%} }
+        .viewer-banner { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:7px 14px; font-size:.78rem; background:#1e293b; color:#cbd5e1; border-bottom:1px solid var(--border-color); }
+        .viewer-banner[hidden], .viewer-brief[hidden] { display:none !important; }
+        .viewer-banner .btn { padding:3px 9px; font-size:.72rem; }
+        .viewer-banner .spacer { flex:1; }
+        #appFrame.off { visibility: hidden; }
+        .viewer-brief { position:absolute; inset:0; z-index:3; overflow:auto; background:var(--bg-base); color:var(--text-main); padding:26px; }
+        .brief-card { max-width:680px; margin:0 auto; background:var(--bg-surface); border:1px solid var(--border-color); border-radius:14px; padding:24px; }
+        .brief-card h2 { font-size:1.15rem; display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+        .brief-card h2 i { color:var(--accent-cyan); }
+        .brief-url { font-size:.78rem; color:var(--accent-cyan); word-break:break-all; margin-bottom:12px; }
+        .brief-card p { font-size:.85rem; color:var(--text-muted); line-height:1.55; margin-bottom:12px; }
+        .brief-actions { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 6px; }
+        .brief-note { font-size:.75rem; color:var(--text-muted); border-top:1px solid var(--border-color); padding-top:12px; margin-top:14px; line-height:1.5; }
+        .brief-card .input-field { width:100%; margin-bottom:8px; }
+        .launch-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+        .launch-row { display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px; padding:10px 12px; font-size:.82rem; }
+        .launch-row small { color:var(--text-muted); display:block; font-size:.72rem; margin-top:2px; }
+        .launch-tag { font-size:.65rem; font-weight:700; padding:2px 6px; border-radius:4px; background:rgba(34,197,94,.2); color:var(--risk-standard); margin-left:6px; text-transform:uppercase; }
+        .launch-tag.win { background:rgba(79,172,254,.2); color:var(--accent-blue); }
+        .content-area.viewer-max .tools-view, .content-area.viewer-max .case-studio-view, .content-area.viewer-max .module-view { display:none !important; }
+        .content-area.viewer-max .viewer-pane { border-left:0; }
+        .module-view h2 { font-size:1.3rem; color:var(--accent-cyan); margin-bottom:4px; }
+        .module-view .sub { color:var(--text-muted); font-size:.82rem; margin-bottom:18px; }
+        .stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-bottom:18px; }
+        .stat { background:var(--bg-surface); border:1px solid var(--border-color); border-radius:10px; padding:14px; }
+        .stat b { display:block; font-size:1.6rem; color:var(--accent-cyan); }
+        .stat span { font-size:.75rem; color:var(--text-muted); text-transform:uppercase; }
+        .report-preview { background:#fff; color:#111827; border-radius:10px; padding:22px; font-size:.85rem; line-height:1.55; }
+        .report-preview h3 { margin:12px 0 4px; } .report-preview td, .report-preview th { border:1px solid #d1d5db; padding:5px 8px; text-align:left; font-size:.78rem; }
+        .report-preview table { border-collapse:collapse; width:100%; margin-top:6px; }
+        .toast-wrap { position:fixed; right:18px; bottom:18px; z-index:300; display:flex; flex-direction:column; gap:8px; }
+        .toast { background:var(--bg-card); border:1px solid var(--accent-cyan); color:var(--text-main); padding:10px 14px; border-radius:8px; font-size:.82rem; box-shadow:0 8px 22px rgba(0,0,0,.4); animation: tin .2s ease-out; max-width:340px; }
+        .toast.warn { border-color:var(--flag-orange); } .toast.err { border-color:var(--flag-red); }
+        @keyframes tin { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+        @media (max-width: 720px) { .viewer-header { padding:8px; } .vh-left #viewerTitle { display:none; } }
+
+        /* ===== News directory ===== */
+        .news-toolbar { position: sticky; top: -20px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--bg-base); padding: 12px 0; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); }
+        .news-toolbar .input-field { width: auto; min-width: 150px; }
+        .news-search { position: relative; flex: 1 1 240px; }
+        .news-search i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: .8rem; pointer-events: none; }
+        .news-search .input-field { width: 100%; padding-left: 32px; }
+        .news-count { margin-left: auto; font-size: .78rem; color: var(--text-muted); white-space: nowrap; }
+        .news-note { font-size: .76rem; color: var(--text-muted); background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; padding: 9px 12px; margin: 10px 0 6px; line-height: 1.5; }
+        .news-note i { color: var(--accent-blue); }
+        .news-region { display: flex; align-items: center; gap: 8px; font-size: .95rem; font-weight: 700; margin: 22px 0 10px; color: var(--text-main); }
+        .news-region small { font-weight: 500; color: var(--text-muted); font-size: .75rem; }
+        .news-card { min-height: 0 !important; gap: 8px; }
+        .news-card .tool-title { align-items: flex-start; }
+        .news-country { font-size: .75rem; color: var(--text-muted); }
+        .nb { padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: .62rem; text-transform: uppercase; white-space: nowrap; }
+        .nb-A { background: rgba(0,242,254,.15); color: var(--accent-cyan); }
+        .nb-P { background: rgba(168,85,247,.2); color: var(--flag-purple); }
+        .nb-O { background: rgba(79,172,254,.2); color: var(--accent-blue); }
+        .nb-G { background: rgba(249,115,22,.2); color: var(--flag-orange); }
+        .nb-R { background: rgba(234,179,8,.2); color: var(--flag-yellow); margin-left: 4px; }
+        .news-links { display: flex; flex-wrap: wrap; gap: 6px; }
+        .news-chip { background: var(--bg-base); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px; padding: 4px 9px; font-size: .74rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; word-break: break-all; text-align: left; }
+        .news-chip:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+        .news-chip.custom::after { content: 'custom'; font-size: .6rem; color: var(--flag-yellow); text-transform: uppercase; }
+        .news-empty { text-align: center; color: var(--text-muted); padding: 50px 10px; font-size: .9rem; }
+        .news-empty i { font-size: 1.8rem; display: block; margin-bottom: 10px; }
+        #newsCoverage details { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; margin-top: 20px; font-size: .8rem; color: var(--text-muted); }
+        #newsCoverage summary { cursor: pointer; font-weight: 600; color: var(--text-main); }
+        #newsCoverage li { margin: 8px 0 0 18px; line-height: 1.5; }
+        .edit-row { margin-bottom: 10px; }
+        .edit-row label { display: block; font-size: .72rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; }
+        .edit-row .input-field { width: 100%; }
+
+        /* ---- Locations, tool groups, summaries ---- */
+        .grp-title { margin: 22px 0 10px; font-size: .95rem; font-weight: 700; color: var(--text-main); display:flex; align-items:center; gap:8px; }
+        .grp-title:first-child { margin-top: 6px; }
+        .grp-title::after { content:''; flex:1; height:1px; background: var(--border-color); }
+        .geo-tag { font-size:.68rem; color: var(--accent-cyan); background: rgba(0,242,254,.08); border:1px solid rgba(0,242,254,.25); padding:2px 7px; border-radius:20px; }
+        .tool-actions .icon-group { display:flex; gap:12px; }
+        .loc-chip { display:flex; flex-wrap:wrap; align-items:center; gap:8px; background: rgba(0,242,254,.07); border:1px solid rgba(0,242,254,.25); border-radius:8px; padding:8px 12px; font-size:.8rem; margin-bottom:14px; }
+        .loc-chip.off { background: var(--bg-card); border-color: var(--border-color); color: var(--text-muted); }
+        .loc-chip i { color: var(--accent-cyan); }
+        .loc-chip button { margin-left:auto; background:transparent; border:1px solid var(--border-color); color: var(--text-muted); border-radius:6px; padding:2px 8px; cursor:pointer; font-size:.72rem; }
+        .loc-chip button:hover { color: var(--text-main); border-color: var(--accent-cyan); }
+        .loc-panel { background: var(--bg-card); border:1px solid var(--border-color); border-radius:10px; padding:14px; margin-bottom:14px; }
+        .loc-panel h3 { font-size:.95rem; margin-bottom:4px; }
+        .loc-panel p.hint { font-size:.78rem; color: var(--text-muted); margin-bottom:10px; line-height:1.45; }
+        .loc-row { display:flex; flex-wrap:wrap; gap:8px; }
+        .loc-row .input-field { flex:1; min-width:200px; }
+        .loc-row select.input-field { flex:0 0 auto; min-width:170px; }
+        .loc-cands { margin-top:10px; display:flex; flex-direction:column; gap:6px; }
+        .loc-cand { text-align:left; background: var(--bg-surface); border:1px solid var(--border-color); color: var(--text-main); border-radius:8px; padding:8px 10px; cursor:pointer; font-size:.8rem; }
+        .loc-cand:hover { border-color: var(--accent-cyan); }
+        .loc-cand small { display:block; color: var(--text-muted); margin-top:2px; }
+        .sum-card { background: var(--bg-card); border:1px solid var(--border-color); border-radius:10px; padding:14px; margin-bottom:18px; }
+        .sum-head { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; align-items:flex-start; }
+        .sum-name { font-size:1.15rem; font-weight:700; }
+        .sum-sub { font-size:.75rem; color: var(--text-muted); margin-top:2px; }
+        .sum-actions { display:flex; flex-wrap:wrap; gap:6px; }
+        .sum-actions .btn { padding:4px 10px; font-size:.75rem; }
+        .sum-line { margin:12px 0; padding:10px 12px; background: var(--bg-surface); border-left:3px solid var(--accent-cyan); border-radius:4px; font-size:.85rem; line-height:1.5; }
+        .sum-group { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color: var(--text-muted); margin:14px 0 6px; }
+        .sum-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:8px; }
+        .sum-tile { display:flex; flex-direction:column; gap:2px; text-align:left; background: var(--bg-surface); border:1px solid var(--border-color); color: var(--text-main); border-radius:8px; padding:10px; cursor:pointer; }
+        .sum-tile:hover { border-color: var(--accent-cyan); }
+        .sum-tile i { color: var(--accent-cyan); font-size:.9rem; }
+        .sum-tile b { font-size:1.35rem; }
+        .sum-tile span { font-size:.72rem; color: var(--text-muted); }
+        .sum-tile.zero { opacity:.45; cursor:default; }
+        .names-box { margin-top:14px; background: var(--bg-surface); border:1px solid var(--border-color); border-radius:8px; padding:10px; max-height:320px; overflow:auto; }
+        .names-box h4 { font-size:.85rem; margin-bottom:8px; }
+        .name-row { display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px solid var(--border-color); font-size:.78rem; }
+        .name-row:last-child { border-bottom:0; }
+        .name-row small { color: var(--text-muted); }
+        .name-row button { background:transparent; border:0; color: var(--accent-cyan); cursor:pointer; font-size:.75rem; white-space:nowrap; }
+        .loc-note { font-size:.72rem; color: var(--text-muted); margin-top:14px; line-height:1.5; }
+        .loc-loading { display:flex; align-items:center; gap:10px; color: var(--text-muted); font-size:.85rem; padding:14px 0; }
+        .loc-loading i { color: var(--accent-cyan); }
+    </style>
+</head>
+<body class="density-comfortable">
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="appSidebar">
+        <div class="brand-header">
+            <i class="fa-solid fa-crosshairs"></i>
+            <div>
+                <h1>OSINT WORKSTATION</h1>
+                <span class="brand-subtext">Professional Investigative Platform</span>
+            </div>
+        </div>
+
+        <nav class="category-nav">
+            <!-- Professional Navigation Sections -->
+            <div class="nav-section-title">Investigation Workspace</div>
+            <div class="nav-item" onclick="showPlaceholder('Dashboard')">
+                <div class="nav-item-left"><i class="fa-solid fa-chart-line"></i> Dashboard</div>
+            </div>
+            <div class="nav-item" id="nav-case-studio" onclick="switchMainView('case-studio')">
+                <div class="nav-item-left"><i class="fa-solid fa-folder-open" style="color: var(--accent-cyan);"></i> Cases</div>
+                <span class="badge" id="count-evidence">0</span>
+            </div>
+            <div class="nav-item" onclick="showPlaceholder('Subjects & Entities')">
+                <div class="nav-item-left"><i class="fa-solid fa-users-viewfinder"></i> Subjects & Entities</div>
+            </div>
+            <div class="nav-item" onclick="switchMainView('case-studio'); switchCaseTab('tab-evidence')">
+                <div class="nav-item-left"><i class="fa-solid fa-scale-balanced"></i> Evidence</div>
+            </div>
+
+            <div class="nav-section-title">Intelligence Sources</div>
+            <div class="nav-item active" id="nav-osint" onclick="filterCategory('osint')">
+                <div class="nav-item-left"><i class="fa-solid fa-globe"></i> OSINT Resources</div>
+            </div>
+            <div class="nav-item" id="nav-darkweb" onclick="filterCategory('darkweb')">
+                <div class="nav-item-left"><i class="fa-brands fa-tor-browser"></i> Dark & Deep Web</div>
+            </div>
+            <div class="nav-item" id="nav-transport" onclick="filterCategory('transport')">
+                <div class="nav-item-left"><i class="fa-solid fa-plane-departure"></i> Transport & Maritime</div>
+            </div>
+            <div class="nav-item" id="nav-cctv" onclick="filterCategory('cctv')">
+                <div class="nav-item-left"><i class="fa-solid fa-video"></i> CCTV & Public Webcams</div>
+            </div>
+            <div class="nav-item" id="nav-locations" onclick="filterCategory('locations')">
+                <div class="nav-item-left"><i class="fa-solid fa-map-location-dot"></i> Locations & Maps</div>
+            </div>
+            <div class="nav-item" id="nav-news" onclick="filterCategory('news')">
+                <div class="nav-item-left"><i class="fa-solid fa-newspaper"></i> News & Open Sources</div>
+            </div>
+
+            <div class="nav-section-title">Administration</div>
+            <div class="nav-item" onclick="showPlaceholder('Timeline')">
+                <div class="nav-item-left"><i class="fa-solid fa-clock-rotate-left"></i> Timeline</div>
+            </div>
+            <div class="nav-item" onclick="showPlaceholder('Reports')">
+                <div class="nav-item-left"><i class="fa-solid fa-file-pdf"></i> Reports</div>
+            </div>
+            <div class="nav-item" onclick="showPlaceholder('Audit Log')">
+                <div class="nav-item-left"><i class="fa-solid fa-clipboard-list"></i> Audit Log</div>
+            </div>
+            <div class="nav-item" onclick="showPlaceholder('Settings')">
+                <div class="nav-item-left"><i class="fa-solid fa-gear"></i> Settings</div>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="workspace">
+        <!-- Top Control Bar -->
+        <header class="top-bar">
+            <div class="query-box">
+                <i class="fa-solid fa-terminal"></i>
+                <input type="text" id="targetQuery" class="query-input" placeholder="Execute global query (Domain, IP, Handle, Coordinates)..." onkeyup="if(event.key==='Enter') runGlobalSearch()">
+            </div>
+            <div class="quick-actions">
+                <button class="btn btn-outline" onclick="quickClipToCase()"><i class="fa-solid fa-link"></i> Add to Case</button>
+                <div class="view-controls">
+                    <select onchange="changeDensity(this.value)" title="Screen Density">
+                        <option value="compact">Compact View</option>
+                        <option value="comfortable" selected>Comfortable View</option>
+                        <option value="large">Large View</option>
+                    </select>
+                </div>
+                <button class="btn btn-outline" onclick="toggleViewerPane()" title="Toggle Viewer"><i class="fa-solid fa-columns"></i></button>
+                <button class="btn btn-outline" onclick="toggleFullScreen()" title="Full Screen"><i class="fa-solid fa-expand"></i></button>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <div class="content-area">
+            
+            <!-- Dynamic Tools View -->
+            <section class="tools-view" id="toolsView">
+                
+                <!-- OSINT RESOURCES -->
+                <div class="category-section active" data-category="osint">
+                    <div class="category-title"><i class="fa-solid fa-globe"></i> General OSINT Resources</div>
+                    <div class="tool-grid">
+                        <!-- Standard OSINT Tools (Migrated) -->
+                        <div class="tool-card">
+                            <div class="tool-header">
+                                <div class="tool-title"><i class="fa-brands fa-google"></i> Google Advanced</div>
+                                <span class="risk-badge risk-standard">Standard</span>
+                            </div>
+                            <div class="tool-desc">Granular parameters query engine. Global primary web search engine.</div>
+                            <div class="tool-meta">
+                                <span><i class="fa-solid fa-tag"></i> Search Engine</span>
+                                <span><i class="fa-solid fa-check-circle"></i> Verified</span>
+                            </div>
+                            <div class="tool-actions">
+                                <button class="tool-action-btn" onclick="openResource('https://www.google.com/advanced_search', 'Google Advanced', 'Standard')">Open Workspace <i class="fa-solid fa-external-link-alt"></i></button>
+                                <button class="tool-action-btn" onclick="addResourceToCase('Google Advanced', 'https://www.google.com/advanced_search')"><i class="fa-solid fa-folder-plus"></i> Add to Case</button>
+                            </div>
+                        </div>
+                        <div class="tool-card">
+                            <div class="tool-header">
+                                <div class="tool-title"><i class="fa-solid fa-building-columns"></i> Wayback Machine</div>
+                                <span class="risk-badge risk-standard">Standard</span>
+                            </div>
+                            <div class="tool-desc">Internet Archive timeline index and static page viewer.</div>
+                            <div class="tool-meta"><span><i class="fa-solid fa-tag"></i> Archives</span></div>
+                            <div class="tool-actions">
+                                <button class="tool-action-btn" onclick="openResource('https://web.archive.org/web/*/', 'Wayback Machine', 'Standard')">Open Workspace <i class="fa-solid fa-external-link-alt"></i></button>
+                                <button class="tool-action-btn" onclick="addResourceToCase('Wayback Machine', 'https://web.archive.org')"><i class="fa-solid fa-folder-plus"></i> Add to Case</button>
+                            </div>
+                        </div>
+                        <div class="tool-card">
+                            <div class="tool-header">
+                                <div class="tool-title"><i class="fa-solid fa-map-location-dot"></i> Google Maps / Earth</div>
+                                <span class="risk-badge risk-standard">Standard</span>
+                            </div>
+                            <div class="tool-desc">Global satellite imagery, geolocation mapping, and street view.</div>
+                            <div class="tool-meta"><span><i class="fa-solid fa-tag"></i> Location</span></div>
+                            <div class="tool-actions">
+                                <button class="tool-action-btn" onclick="openResource('https://www.google.com/maps', 'Google Maps', 'Standard')">Open Workspace <i class="fa-solid fa-external-link-alt"></i></button>
+                                <button class="tool-action-btn" onclick="addResourceToCase('Google Maps', 'https://maps.google.com')"><i class="fa-solid fa-folder-plus"></i> Add to Case</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DARK & DEEP WEB -->
+                <div class="category-section" data-category="darkweb">
+                    <div class="category-title"><i class="fa-brands fa-tor-browser"></i> Dark & Deep Web Intelligence</div>
+                    <div class="risk-warning">
+                        <strong>WARNING:</strong> These resources may contain illegal, harmful, disturbing, or unverified material. Access and use must comply with applicable law, organizational policy, investigative authority, and platform terms. Do not automatically scrape or download materials.
+                    </div>
+                    
+                    <h3 style="margin-bottom: 10px; font-size: 0.95rem; color: var(--text-main);">Search Engines</h3>
+                    <div class="tool-grid" style="margin-bottom: 25px;">
+                        <!-- Dark Web Items -->
+                        <script>
+                            const dwSearches = [
+                                { name: 'Ahmia', desc: 'Search Tor Hidden Services', url: 'http://ahmia.fi' },
+                                { name: 'Tor66', desc: 'Search and Find .onion Websites', url: 'http://tor66.onion' },
+                                { name: 'Torch', desc: 'Dark Web Search Engine', url: 'http://torch.onion' },
+                                { name: 'Kilos', desc: 'Dark Search Engine', url: 'http://kilos.onion' },
+                                { name: 'Google.onion', desc: 'Darknet Google Mirror', url: 'http://google.onion' },
+                                { name: 'Phobos', desc: 'DarkNet Search', url: 'http://phobos.onion' },
+                                { name: 'TORMAX', desc: 'Hidden Service Directory', url: 'http://tormax.onion' },
+                                { name: 'GDARK', desc: 'Darknet Search Engine', url: 'http://gdark.onion' }
+                            ];
+                            dwSearches.forEach(t => {
+                                document.write(`
+                                    <div class="tool-card">
+                                        <div class="tool-header">
+                                            <div class="tool-title"><i class="fa-solid fa-magnifying-glass-shield"></i> ${t.name}</div>
+                                            <span class="risk-badge risk-high">High Risk</span>
+                                        </div>
+                                        <div class="tool-desc">${t.desc}</div>
+                                        <div class="tool-meta"><span><i class="fa-solid fa-clock"></i> Last Verified: Today</span></div>
+                                        <div class="tool-actions">
+                                            <button class="tool-action-btn" onclick="openResource('${t.url}', '${t.name}', 'High Risk')">Open <i class="fa-solid fa-arrow-right"></i></button>
+                                            <button class="tool-action-btn" onclick="addResourceToCase('${t.name}', '${t.url}')"><i class="fa-solid fa-folder-plus"></i></button>
+                                        </div>
+                                    </div>
+                                `);
+                            });
+                        </script>
+                    </div>
+
+                    <h3 style="margin-bottom: 10px; font-size: 0.95rem; color: var(--text-main);">Service & Site Directories</h3>
+                    <div class="tool-grid" style="margin-bottom: 25px;">
+                        <script>
+                            const dwDirs = ['The Hidden Wiki', 'OnionLinks', 'Onion.Live', 'tor.taxi', 'dark.fail'];
+                            dwDirs.forEach(t => {
+                                document.write(`
+                                    <div class="tool-card">
+                                        <div class="tool-header">
+                                            <div class="tool-title"><i class="fa-solid fa-list"></i> ${t}</div>
+                                            <span class="risk-badge risk-sensitive">Sensitive</span>
+                                        </div>
+                                        <div class="tool-desc">Third-party Onion Directory. Verify source provenance before use.</div>
+                                        <div class="tool-actions">
+                                            <button class="tool-action-btn" onclick="openResource('#', '${t}', 'Sensitive')">Open <i class="fa-solid fa-arrow-right"></i></button>
+                                            <button class="tool-action-btn" onclick="addResourceToCase('${t}', 'Directory')"><i class="fa-solid fa-folder-plus"></i></button>
+                                        </div>
+                                    </div>
+                                `);
+                            });
+                        </script>
+                    </div>
+                    
+                    <h3 style="margin-bottom: 10px; font-size: 0.95rem; color: var(--text-main);">Breach & Leak Monitoring</h3>
+                    <div class="tool-grid" style="margin-bottom: 25px;">
+                        <script>
+                            const dwLeaks = ['BreachForums', 'Ransomware Live', 'Ransomlook'];
+                            dwLeaks.forEach(t => {
+                                document.write(`
+                                    <div class="tool-card">
+                                        <div class="tool-header">
+                                            <div class="tool-title"><i class="fa-solid fa-skull-crossbones"></i> ${t}</div>
+                                            <span class="risk-badge risk-high">High Risk</span>
+                                        </div>
+                                        <div class="tool-desc">Leak monitoring. DO NOT automatically download or ingest stolen credentials.</div>
+                                        <div class="tool-actions">
+                                            <button class="tool-action-btn" onclick="openResource('#', '${t}', 'High Risk')">Record Observation <i class="fa-solid fa-eye"></i></button>
+                                        </div>
+                                    </div>
+                                `);
+                            });
+                        </script>
+                    </div>
+                    
+                    <h3 style="margin-bottom: 10px; font-size: 0.95rem; color: var(--text-main);">Chat & File Sharing</h3>
+                    <div class="tool-grid">
+                        <div class="tool-card">
+                            <div class="tool-header">
+                                <div class="tool-title"><i class="fa-solid fa-share-nodes"></i> OnionShare</div>
+                                <span class="risk-badge risk-sensitive">Sensitive</span>
+                            </div>
+                            <div class="tool-desc">Secure and anonymous file sharing over Tor. Treat as external resource.</div>
+                            <div class="tool-actions">
+                                <button class="tool-action-btn" onclick="openResource('#', 'OnionShare', 'Sensitive')">Open <i class="fa-solid fa-arrow-right"></i></button>
+                                <button class="tool-action-btn" onclick="addResourceToCase('OnionShare', 'OnionShare')"><i class="fa-solid fa-folder-plus"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TRANSPORT & MARITIME -->
+                <div class="category-section" data-category="transport">
+                    <div class="category-title"><i class="fa-solid fa-plane-departure"></i> Transport & Maritime Intelligence</div>
+                    <div class="category-desc">Aviation, maritime, road and rail public tracking intelligence. Preserve source and timestamp information.</div>
+                    <div class="loc-chip-host"></div>
+                    <div id="grp-transport"></div>
+                </div>
+
+                <!-- CCTV & PUBLIC WEBCAMS -->
+                <div class="category-section" data-category="cctv">
+                    <div class="category-title"><i class="fa-solid fa-video"></i> CCTV & Public Webcams</div>
+                    <div class="category-desc">Legitimately public cameras and livestreams. Unauthorized access to private systems is strictly prohibited.</div>
+                    <div class="loc-chip-host"></div>
+                    <div id="grp-cctv"></div>
+                </div>
+
+                <!-- LOCATIONS & MAPS -->
+                <div class="category-section" data-category="locations">
+                    <div class="category-title"><i class="fa-solid fa-map-location-dot"></i> Locations & Maps</div>
+                    <div class="category-desc">Search any town, district or area for a summary of mapped facilities (schools, clinics, hospitals, hotels, lodges, recreation and more), then open the map, imagery, sun/shadow and infrastructure tools centred on it.</div>
+                    <div class="loc-chip-host"></div>
+                    <div class="loc-panel">
+                        <h3><i class="fa-solid fa-magnifying-glass-location" style="color:var(--accent-cyan)"></i> Location Summary</h3>
+                        <p class="hint">Type a place name (e.g. <em>Kafue</em>) or coordinates (e.g. <em>-15.77, 28.18</em>). Counts come from OpenStreetMap via the Overpass API, so they reflect what has been mapped, not an official census.</p>
+                        <div class="loc-row">
+                            <input type="text" id="locQuery" class="input-field" placeholder="Place name or latitude, longitude..." aria-label="Location to summarise">
+                            <select id="locScope" class="input-field" aria-label="Search scope">
+                                <option value="area">Administrative area boundary</option>
+                                <option value="2000">Radius 2 km</option>
+                                <option value="5000">Radius 5 km</option>
+                                <option value="10000">Radius 10 km</option>
+                                <option value="25000">Radius 25 km</option>
+                            </select>
+                            <button class="btn" id="locGo"><i class="fa-solid fa-chart-pie"></i> Summarise</button>
+                        </div>
+                        <div class="loc-cands" id="locCands"></div>
+                    </div>
+                    <div id="locSummary"></div>
+                    <div id="grp-locations"></div>
+                </div>
+
+                <!-- NEWS & OPEN SOURCES -->
+                <div class="category-section" data-category="news">
+                    <div class="category-title"><i class="fa-solid fa-newspaper"></i> News &amp; Open Sources</div>
+                    <div class="category-desc">National news agencies, public broadcasters and international organisations. Filter by country, region or source type, then open any source in the viewer.</div>
+                    <div class="news-toolbar">
+                        <div class="news-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" id="newsSearch" class="input-field" placeholder="Search country, agency or website..." aria-label="Search news sources"></div>
+                        <select id="newsRegion" class="input-field" aria-label="Filter by region"></select>
+                        <select id="newsCountry" class="input-field" aria-label="Filter by country"></select>
+                        <select id="newsType" class="input-field" aria-label="Filter by source type">
+                            <option value="">All source types</option>
+                            <option value="A">Wire / state agency</option>
+                            <option value="P">Broadcaster or newspaper</option>
+                            <option value="O">International organisation</option>
+                            <option value="G">Global wire</option>
+                        </select>
+                        <button class="btn btn-outline" id="newsClear" type="button"><i class="fa-solid fa-filter-circle-xmark"></i> Clear</button>
+                        <span class="news-count" id="newsCount" aria-live="polite"></span>
+                    </div>
+                    <div class="news-note"><i class="fa-solid fa-circle-info"></i> Links were compiled from general knowledge and have not all been live-tested. Use the <b>Edit</b> button on a card to correct a link; your changes are saved on this device. Cards tagged <b>Broadcaster / Newspaper</b> are the most reliable public outlet used where a country has no clear national agency.</div>
+                    <div id="newsDirectory"></div>
+                    <div id="newsCoverage"></div>
+                </div>
+
+            </section>
+
+            <!-- Case Management Workspace View -->
+            <section class="case-studio-view" id="caseStudioView">
+                <div class="case-header">
+                    <div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Active Investigation Workspace</div>
+                        <h2 id="activeCaseTitle" style="color: var(--accent-cyan); font-size: 1.5rem; margin-top: 4px;">Loading Case...</h2>
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">ID: <span id="activeCaseId"></span> | Status: <span style="color: var(--risk-standard)">Open</span></div>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline" onclick="saveCaseDetails()"><i class="fa-solid fa-floppy-disk"></i> Save Workspace</button>
+                    </div>
+                </div>
+
+                <div class="case-tabs">
+                    <div class="case-tab active" onclick="switchCaseTab('tab-overview', this)">Overview & Subjects</div>
+                    <div class="case-tab" onclick="switchCaseTab('tab-evidence', this)">Evidence File</div>
+                    <div class="case-tab" onclick="switchCaseTab('tab-intelligence', this)">Intelligence & Findings</div>
+                    <div class="case-tab" onclick="switchCaseTab('tab-reports', this)">Reports & Audit</div>
+                </div>
+
+                <!-- Tab: Overview -->
+                <div class="case-tab-content active" id="tab-overview">
+                    <div class="case-card-panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><i class="fa-solid fa-user-secret"></i> Target Profiles & Entities</div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Primary Target Name / Alias</label>
+                                <input type="text" id="primarySuspect" class="input-field" placeholder="e.g. John Doe / 'Shadow'">
+                            </div>
+                            <div class="form-group">
+                                <label>Associated Entities (Comma-separated)</label>
+                                <input type="text" id="accomplices" class="input-field" placeholder="e.g. Corp LLC, Jane Smith">
+                            </div>
+                            <div class="form-group">
+                                <label>Other Subjects / POIs</label>
+                                <input type="text" id="otherSuspects" class="input-field" placeholder="e.g. Target B">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Master Investigation Objectives & Notes</label>
+                            <textarea id="caseNotes" class="input-field" placeholder="Enter operational context, authorized scope, and high-level summaries..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Evidence -->
+                <div class="case-tab-content" id="tab-evidence">
+                    <div class="case-card-panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><i class="fa-solid fa-file-circle-plus"></i> Record Evidence / Source Observation</div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group" style="grid-column: span 2;">
+                                <label>Source Link / URL</label>
+                                <input type="text" id="evUrl" class="input-field" placeholder="https://...">
+                            </div>
+                            <div class="form-group">
+                                <label>Observation Title / Label</label>
+                                <input type="text" id="evTitle" class="input-field" placeholder="e.g. Server IP Log">
+                            </div>
+                            <div class="form-group">
+                                <label>Provenance Confidence</label>
+                                <select id="evFlag" class="input-field">
+                                    <option value="red">Verified - Confirmed Evidence</option>
+                                    <option value="orange">Corroborated - Probable</option>
+                                    <option value="yellow" selected>Unverified - Raw Observation</option>
+                                    <option value="purple">Inferred - Analytical Assessment</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Associate to Entity</label>
+                                <select id="evEntity" class="input-field">
+                                    <option value="Primary Target">Primary Target</option>
+                                    <option value="Associated Entity">Associated Entity</option>
+                                    <option value="General Lead">General Lead</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label>Investigator Provenance Notes</label>
+                            <textarea id="evNotes" class="input-field" placeholder="Note collection date, hash, corroborating sources..."></textarea>
+                        </div>
+                        <button class="btn" style="width: fit-content;" onclick="addEvidenceItem()"><i class="fa-solid fa-plus"></i> Record to Case File</button>
+                    </div>
+
+                    <div class="case-card-panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><i class="fa-solid fa-sitemap"></i> Evidence Registry</div>
+                        </div>
+                        <div id="evidenceDisplayContainer">
+                            <!-- Rendered by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Intelligence -->
+                <div class="case-tab-content" id="tab-intelligence">
+                    <div class="case-card-panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><i class="fa-solid fa-brain"></i> Analytical Assessment</div>
+                        </div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);">This section separates verified evidence from analytical hypotheses. Do not automatically convert an OSINT claim into a confirmed fact.</p>
+                        <textarea class="input-field" style="width: 100%; margin-top: 10px; height: 150px;" placeholder="Document hypotheses, corroborations, and contradictions here..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Tab: Reports -->
+                <div class="case-tab-content" id="tab-reports">
+                    <div class="case-card-panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><i class="fa-solid fa-file-pdf"></i> Generated Reports & Audit Trail</div>
+                        </div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);">Formal reporting and immutable audit logging. (Reporting module interface)</p>
+                        <button class="btn btn-outline" style="margin-top: 15px;"><i class="fa-solid fa-download"></i> Generate Executive Summary</button>
+                    </div>
+                </div>
+
+            </section>
+
+                        <section class="tools-view module-view" id="moduleView" style="display:none"></section>
+
+            <!-- Embedded Workspace Viewer Pane -->
+            <section class="viewer-pane" id="viewerPane">
+                <div class="viewer-header">
+                    <div class="vh-left">
+                        <button class="btn btn-outline" style="padding:4px 8px;" onclick="reloadViewer()" title="Reload" aria-label="Reload"><i class="fa-solid fa-arrows-rotate"></i></button>
+                        <button class="btn btn-outline" style="padding:4px 8px;" onclick="toggleViewerMax()" title="Maximize viewer" aria-label="Maximize viewer"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                        <span id="viewerTitle" style="font-weight:600;font-size:.85rem;">Application Viewer</span>
+                    </div>
+                    <input type="text" id="viewerUrlInput" class="viewer-url" placeholder="Enter a URL, domain, IP, coordinates or search term, then press Enter" aria-label="Viewer address" onkeydown="if(event.key==='Enter') viewerGo(this.value)">
+                    <div class="vh-right">
+                        <button class="btn btn-success" style="padding:4px 8px;font-size:.75rem;" onclick="quickClipToCase()"><i class="fa-solid fa-folder-plus"></i> Add to Case</button>
+                        <button class="btn btn-outline" style="padding:4px 8px;" onclick="openAppWindow()" title="Open in App Window" aria-label="Open in App Window"><i class="fa-solid fa-window-restore"></i></button>
+                        <button class="btn btn-outline" style="padding:4px 8px;" onclick="openInTab()" title="Open in browser tab" aria-label="Open in browser tab"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                        <button class="btn btn-outline" style="padding:4px 8px;" onclick="closeViewer()" title="Close resource" aria-label="Close resource"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+                <div class="viewer-progress" id="viewerProgress"></div>
+                <div class="viewer-banner" id="viewerBanner" hidden>
+                    <i class="fa-solid fa-circle-info" style="color:var(--accent-blue)"></i>
+                    <span id="viewerBannerText"></span>
+                    <span class="spacer"></span>
+                    <button class="btn" onclick="openAppWindow()"><i class="fa-solid fa-window-restore"></i> Open in App Window</button>
+                    <button class="btn btn-outline" onclick="document.getElementById('viewerBanner').hidden=true">Dismiss</button>
+                </div>
+                <div class="iframe-container">
+                    <div class="viewer-empty" id="viewerEmpty">
+                        <i class="fa-solid fa-window-maximize"></i>
+                        <strong>Application Viewer</strong>
+                        <span>Select <b>Open</b> on any resource, or type a URL, domain, IP, coordinates or search term in the address bar. Sites that forbid embedding open in a dedicated App Window with a full resource brief here.</span>
+                    </div>
+                    <div class="viewer-brief" id="viewerBrief" hidden></div>
+                    <iframe id="appFrame" class="off" title="External resource application viewer" src="about:blank" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads" referrerpolicy="no-referrer"></iframe>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <!-- Risk Warning Modal -->
+    <div class="modal-overlay" id="riskModal">
+        <div class="modal-content">
+            <div class="modal-title danger"><i class="fa-solid fa-triangle-exclamation"></i> HIGH RISK RESOURCE</div>
+            <div class="modal-body">
+                You are about to open an external high-risk OSINT resource. Ensure that access is authorized and complies with organizational policy, investigative authority, and applicable law. 
+                <br><br>The application will not disguise, proxy, or automatically manipulate external websites.
+                <br><br><strong>Target:</strong> <span id="riskTargetUrl" style="word-break: break-all; color: var(--accent-cyan);"></span>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeModal('riskModal')">Cancel Access</button>
+                <button class="btn btn-danger" onclick="confirmRiskAccess()">I Confirm Authorization</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Link Modal -->
+    <div class="modal-overlay" id="editLinkModal">
+        <div class="modal-content">
+            <div class="modal-title"><i class="fa-solid fa-pen"></i> <span id="editLinkTitle">Edit link</span></div>
+            <div class="modal-body" id="editLinkBody"></div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeModal('editLinkModal')">Cancel</button>
+                <button class="btn btn-outline" id="editLinkReset">Reset to default</button>
+                <button class="btn" id="editLinkSave">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add to Case Modal -->
+    <div class="modal-overlay" id="addToCaseModal">
+        <div class="modal-content">
+            <div class="modal-title"><i class="fa-solid fa-folder-plus"></i> Record Source to Case</div>
+            <div class="modal-body">
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Resource Name</label>
+                    <input type="text" id="addResName" class="input-field" readonly>
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Resource URL</label>
+                    <input type="text" id="addResUrl" class="input-field" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Investigator Observation Notes</label>
+                    <textarea id="addResNotes" class="input-field" placeholder="Record purpose of consultation..."></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeModal('addToCaseModal')">Cancel</button>
+                <button class="btn" onclick="confirmAddToCase()">Record Observation</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+        const LS_CASES = 'osint_workstation_cases', LS_AUDIT = 'osint_workstation_audit',
+              LS_DENSITY = 'osint_workstation_density', LS_URLS = 'osint_workstation_custom_urls';
+        const store = {
+            get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+            set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } }
+        };
+        const parseJSON = (s, d) => { try { return s ? JSON.parse(s) : d; } catch (e) { return d; } };
+        const $ = id => document.getElementById(id);
+        const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+        let cases = [], activeCaseIndex = 0, audit = [], customUrls = {}, pendingRisk = null;
+        const viewer = { url: '', title: '', risk: 'Standard', timer: null, kind: 'empty' };
+
+        /* ---------- Resource registry: real destinations for cards that had '#' or search placeholders ---------- */
+        const REG = {
+            'Google Advanced': 'https://www.google.com/advanced_search',
+            'Wayback Machine': 'https://web.archive.org/',
+            'Google Maps': 'https://www.google.com/maps',
+            'Ahmia': 'https://ahmia.fi/', 'dark.fail': 'https://dark.fail/',
+            'Ransomware Live': 'https://www.ransomware.live/', 'Ransomlook': 'https://www.ransomlook.io/',
+            'Flightradar24': 'https://www.flightradar24.com/-15.41,28.29/6', 'FlightAware': 'https://www.flightaware.com/live/',
+            'ADS-B Exchange': 'https://globe.adsbexchange.com/', 'OpenSky Network': 'https://map.opensky-network.org/',
+            'Aviationstack': 'https://aviationstack.com/', 'FAA Resources': 'https://www.faa.gov/',
+            'EUROCONTROL': 'https://www.eurocontrol.int/',
+            'MarineTraffic': 'https://www.marinetraffic.com/en/ais/home/centerx:-12.0/centery:25.0/zoom:4', 'VesselFinder': 'https://www.vesselfinder.com/',
+            'FleetMon': 'https://www.fleetmon.com/', 'MyShipTracking': 'https://www.myshiptracking.com/',
+            'Webcam Map': 'https://www.windy.com/webcams', 'Public Cam Map': 'https://www.windy.com/webcams',
+            'BBC News': 'https://www.bbc.com/news'
+        };
+        // Sites that send X-Frame-Options / CSP frame-ancestors and can never render inside an iframe.
+        const BLOCKED = ['google.com','bbc.com','bbc.co.uk','flightradar24.com','flightaware.com','marinetraffic.com',
+            'aviationstack.com','faa.gov','eurocontrol.int','fleetmon.com','duckduckgo.com','bing.com','yandex.com',
+            'facebook.com','instagram.com','x.com','twitter.com','linkedin.com','github.com','reddit.com','tiktok.com',
+            'shodan.io','openstreetmap.org','waze.com','planefinder.net','mapillary.com','earthcam.com','virustotal.com','whois.com','t.me','telegram.org','youtube.com'];
+        const TRUSTED = ['maps.google.com','embed.windy.com','archive.org','wikipedia.org','youtube.com'];
+
+        const hostOf = u => u.hostname.replace(/^www\./, '').toLowerCase();
+        const hostIn = (h, list) => list.some(d => h === d || h.endsWith('.' + d));
+        function toEmbedUrl(u) {
+            const h = hostOf(u);
+            if (h === 'maps.google.com' || (h === 'google.com' && u.pathname.startsWith('/maps'))) {
+                if (u.searchParams.get('output') === 'embed') return u.href;
+                let q = u.searchParams.get('q') || u.searchParams.get('query');
+                const pm = u.pathname.match(/^\/maps\/place\/([^\/]+)/);
+                if (!q && pm) { try { q = decodeURIComponent(pm[1]).replace(/\+/g, ' '); } catch (e) { q = pm[1]; } }
+                const p = new URLSearchParams({ output: 'embed', t: 'h', z: q ? '13' : '3' });
+                if (q) p.set('q', q); else p.set('ll', '10,20');
+                return 'https://maps.google.com/maps?' + p.toString();
+            }
+            if (h === 'youtube.com' && u.pathname === '/watch' && u.searchParams.get('v'))
+                return 'https://www.youtube.com/embed/' + encodeURIComponent(u.searchParams.get('v'));
+            return u.href;
+        }
+        function isBlocked(u) {
+            const h = hostOf(u), e = toEmbedUrl(u);
+            if (e !== u.href || hostIn(h, ['embed.windy.com'])) return false;
+            return hostIn(h, BLOCKED);
+        }
+
+        /* ---------- UI helpers ---------- */
+        function toast(msg, type) {
+            let w = document.querySelector('.toast-wrap');
+            if (!w) { w = document.createElement('div'); w.className = 'toast-wrap'; w.setAttribute('role', 'status'); document.body.appendChild(w); }
+            const t = document.createElement('div'); t.className = 'toast ' + (type || ''); t.textContent = msg; w.appendChild(t);
+            setTimeout(() => t.remove(), 3800);
+        }
+        function logAudit(action, detail) {
+            audit.unshift({ t: new Date().toISOString(), case: (cases[activeCaseIndex] || {}).id || '-', action, detail: detail || '' });
+            audit = audit.slice(0, 500); store.set(LS_AUDIT, JSON.stringify(audit));
+        }
+        function download(name, text, type) {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([text], { type: type || 'text/plain' })); a.download = name;
+            document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+        }
+        function copyText(s) {
+            const done = () => toast('Copied to clipboard');
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(s).then(done, () => fallbackCopy(s, done));
+            else fallbackCopy(s, done);
+        }
+        function fallbackCopy(s, done) {
+            const t = document.createElement('textarea'); t.value = s; document.body.appendChild(t); t.select();
+            try { document.execCommand('copy'); done(); } catch (e) { toast('Copy failed', 'err'); } t.remove();
+        }
+
+        /* ---------- Persistence ---------- */
+        function newCase() { return { id: 'CASE-' + Math.floor(Math.random() * 10000), title: 'New Investigation Workspace', primarySuspect: '', accomplices: '', otherSuspects: '', caseNotes: '', evidence: [] }; }
+        function loadData() {
+            cases = parseJSON(store.get(LS_CASES), null);
+            if (!Array.isArray(cases) || !cases.length) {
+                const legacy = parseJSON(store.get('central_osint_case'), null);
+                if (legacy) { legacy.id = 'CASE-' + Math.floor(Math.random() * 10000); legacy.title = 'Migrated Legacy Investigation'; cases = [legacy]; }
+                else cases = [newCase()];
+                saveAll();
+            }
+            audit = parseJSON(store.get(LS_AUDIT), []); customUrls = parseJSON(store.get(LS_URLS), {});
+        }
+        function saveAll() { store.set(LS_CASES, JSON.stringify(cases)); }
+        const activeCase = () => cases[activeCaseIndex];
+
+        window.saveCaseDetails = function () {
+            const c = activeCase();
+            c.primarySuspect = $('primarySuspect').value.trim(); c.accomplices = $('accomplices').value.trim();
+            c.otherSuspects = $('otherSuspects').value.trim(); c.caseNotes = $('caseNotes').value.trim();
+            saveAll(); logAudit('Workspace saved'); toast('Workspace saved');
+        };
+        function updateCaseUI() {
+            const c = activeCase();
+            $('activeCaseTitle').textContent = c.title || 'Untitled Case'; $('activeCaseId').textContent = c.id;
+            $('primarySuspect').value = c.primarySuspect || ''; $('accomplices').value = c.accomplices || '';
+            $('otherSuspects').value = c.otherSuspects || ''; $('caseNotes').value = c.caseNotes || '';
+            $('count-evidence').textContent = (c.evidence || []).length;
+        }
+
+        /* ---------- Evidence ---------- */
+        window.addEvidenceItem = function (urlVal, titleVal, notesVal) {
+            const manual = !urlVal;
+            const url = urlVal || $('evUrl').value.trim();
+            if (!url) { toast('Enter a source link or URL first', 'warn'); return; }
+            const item = {
+                id: Date.now(), url, title: titleVal || $('evTitle').value.trim() || 'Source Observation',
+                flag: $('evFlag') ? $('evFlag').value : 'yellow', entity: $('evEntity') ? $('evEntity').value : 'General Lead',
+                notes: notesVal != null ? notesVal : ($('evNotes') ? $('evNotes').value.trim() : ''), timestamp: new Date().toISOString()
+            };
+            const c = activeCase(); (c.evidence = c.evidence || []).unshift(item);
+            saveAll(); logAudit('Evidence recorded', item.title + ' | ' + url); updateCaseUI(); renderEvidence();
+            if (manual) { $('evUrl').value = ''; $('evTitle').value = ''; $('evNotes').value = ''; toast('Evidence recorded to case file'); }
+        };
+        function renderEvidence() {
+            const list = activeCase().evidence || [], box = $('evidenceDisplayContainer');
+            if (!list.length) { box.innerHTML = '<p style="color:var(--text-muted);font-size:.85rem;padding:20px 0;">No evidence or source observations recorded yet.</p>'; return; }
+            box.innerHTML = '<div style="overflow-x:auto"><table class="evidence-table"><thead><tr><th>Confidence</th><th>Provenance / Source</th><th>Entity</th><th>Notes</th><th>Date</th></tr></thead><tbody>' +
+                list.map(i => `<tr><td><span class="flag-pill flag-${esc(i.flag)}">${esc(i.flag)}</span></td>
+                <td><strong>${esc(i.title)}</strong><br><a href="#" data-ev="${esc(i.id)}" style="color:var(--accent-cyan);font-size:.75rem;word-break:break-all;">${esc(i.url)}</a></td>
+                <td><span style="font-size:.8rem;font-weight:600;">${esc(i.entity)}</span></td>
+                <td style="color:var(--text-muted);font-size:.8rem;">${esc(i.notes || 'N/A')}</td>
+                <td style="font-size:.75rem;color:var(--text-muted);">${esc(new Date(i.timestamp).toLocaleString())}</td></tr>`).join('') + '</tbody></table></div>';
+            box.querySelectorAll('a[data-ev]').forEach(a => a.addEventListener('click', e => {
+                e.preventDefault(); const it = list.find(x => String(x.id) === a.dataset.ev); if (it) window.openResource(it.url, it.title, 'Standard');
+            }));
+        }
+
+        /* ---------- Navigation ---------- */
+        const VIEWS = ['toolsView', 'caseStudioView', 'moduleView'];
+        function showView(id) {
+            VIEWS.forEach(v => { $(v).style.display = (v === id) ? (v === 'caseStudioView' ? 'flex' : 'block') : 'none'; });
+            $('moduleView').classList.toggle('active-module', id === 'moduleView');
+            document.querySelector('.content-area').classList.remove('viewer-max');
+        }
+        function setNav(el) { document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active')); if (el) el.classList.add('active'); }
+        window.switchMainView = function (type) {
+            if (type === 'case-studio') { setNav($('nav-case-studio')); showView('caseStudioView'); updateCaseUI(); renderEvidence(); }
+            else showView('toolsView');
+        };
+        window.switchCaseTab = function (tabId) {
+            document.querySelectorAll('.case-tab').forEach(t => t.classList.toggle('active', (t.getAttribute('onclick') || '').indexOf("'" + tabId + "'") > -1));
+            document.querySelectorAll('.case-tab-content').forEach(c => c.classList.toggle('active', c.id === tabId));
+        };
+        window.filterCategory = function (key) {
+            showView('toolsView'); setNav($('nav-' + key));
+            document.querySelectorAll('.category-section').forEach(s => s.classList.toggle('active', s.dataset.category === key));
+            $('toolsView').scrollTop = 0;
+        };
+        window.changeDensity = function (v) { document.body.className = 'density-' + v; store.set(LS_DENSITY, v); const s = document.querySelector('.view-controls select'); if (s) s.value = v; };
+        window.toggleFullScreen = function () {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => toast('Full screen is not available here', 'warn'));
+            else document.exitFullscreen();
+        };
+        window.toggleViewerPane = function () { $('viewerPane').classList.toggle('is-hidden'); };
+        window.toggleViewerMax = function () { document.querySelector('.content-area').classList.toggle('viewer-max'); };
+        window.closeModal = id => { $(id).style.display = 'none'; };
+        window.escapeHtml = esc;
+
+        /* ---------- In-App Viewer ---------- */
+        function setMeta(title, url) {
+            viewer.title = title || 'External Resource'; viewer.url = url || '';
+            $('viewerTitle').textContent = viewer.title; $('viewerUrlInput').value = url || '';
+        }
+        function showPane() { const p = $('viewerPane'); p.classList.remove('is-hidden'); }
+        function resetFrame() {
+            clearTimeout(viewer.timer); $('viewerProgress').classList.remove('on'); $('viewerBanner').hidden = true;
+            const f = $('appFrame'); f.classList.add('off'); f.onload = null;
+        }
+        function banner(text) { $('viewerBannerText').textContent = text; $('viewerBanner').hidden = false; }
+
+        window.openResource = function (url, title, risk) {
+            const custom = customUrls[title];
+            const u = custom || REG[title] || url;
+            if (risk === 'High Risk' || risk === 'Sensitive') {
+                pendingRisk = { url: u, title, risk };
+                $('riskTargetUrl').textContent = (u && u !== '#') ? u : title + ' (no destination configured)';
+                $('riskModal').style.display = 'flex';
+            } else window.loadInApp(u, title, risk);
+        };
+        window.confirmRiskAccess = function () {
+            closeModal('riskModal'); if (pendingRisk) { logAudit('High-risk access confirmed', pendingRisk.title); window.loadInApp(pendingRisk.url, pendingRisk.title, pendingRisk.risk); }
+        };
+        window.loadInApp = function (raw, title, risk, force) {
+            showPane(); $('viewerEmpty').classList.add('hidden'); resetFrame();
+            viewer.risk = risk || 'Standard';
+            let url = (raw || '').trim();
+            if (!url || url === '#') { setMeta(title, ''); return showBrief('nourl'); }
+            let u; try { u = new URL(url); } catch (e) { setMeta(title, url); return showBrief('nourl', 'The address is not a valid URL.'); }
+            setMeta(title, u.href);
+            if (u.hostname.endsWith('.onion')) return showBrief('tor');
+            if (!['http:', 'https:'].includes(u.protocol)) return showBrief('nourl', 'Only HTTP and HTTPS addresses can be shown in the viewer.');
+            logAudit('Resource opened', (title || '') + ' | ' + u.href);
+            if (!force && isBlocked(u)) return showBrief('blocked');
+            $('viewerBrief').hidden = true; viewer.kind = 'frame';
+            const f = $('appFrame'), trusted = hostIn(hostOf(u), TRUSTED);
+            $('viewerProgress').classList.add('on');
+            f.onload = () => {
+                clearTimeout(viewer.timer); $('viewerProgress').classList.remove('on'); f.classList.remove('off');
+                if (!trusted) banner('Loaded in the embedded viewer. If the page is blank or reports it refused to connect, this site blocks embedding.');
+            };
+            viewer.timer = setTimeout(() => { f.classList.remove('off'); $('viewerProgress').classList.remove('on'); banner('This is taking a while. If nothing appears, the site may block embedding or be unreachable.'); }, 12000);
+            f.src = toEmbedUrl(u);
+        };
+        window.reloadViewer = function () {
+            if (viewer.kind === 'frame' && viewer.url) window.loadInApp(viewer.url, viewer.title, viewer.risk, true);
+            else if (viewer.kind === 'launcher') showLauncher(viewer.url);
+            else toast('Nothing to reload yet', 'warn');
+        };
+        window.closeViewer = function () {
+            resetFrame(); $('appFrame').src = 'about:blank'; viewer.kind = 'empty'; setMeta('Application Viewer', ''); $('viewerBrief').hidden = true; $('viewerEmpty').classList.remove('hidden');
+            document.querySelector('.content-area').classList.remove('viewer-max');
+        };
+        window.openAppWindow = function (url, title) {
+            const target = url || viewer.url;
+            if (!/^https?:/i.test(target || '')) { toast('No web address to open', 'warn'); return; }
+            const w = Math.min(1280, screen.availWidth - 80), h = Math.min(820, screen.availHeight - 80);
+            const win = window.open(target, 'osint_app_window', `popup=yes,width=${w},height=${h},left=${Math.round((screen.availWidth - w) / 2)},top=${Math.round((screen.availHeight - h) / 2)},resizable=yes,scrollbars=yes`);
+            if (!win) { toast('Pop-up blocked. Allow pop-ups for this page, then try again.', 'warn'); return; }
+            try { win.opener = null; } catch (e) {}
+            logAudit('Opened in app window', (title || viewer.title) + ' | ' + target);
+        };
+        window.openInTab = function () {
+            if (!/^https?:/i.test(viewer.url || '')) { toast('No web address to open', 'warn'); return; }
+            window.open(viewer.url, '_blank', 'noopener,noreferrer');
+        };
+        window.viewerGo = function (val) {
+            val = (val || '').trim(); if (!val) return;
+            if (/^https?:\/\//i.test(val)) return window.loadInApp(val, 'Custom Address', 'Standard');
+            if (!/\s/.test(val) && /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(val) && !/^\d+(\.\d+){3}$/.test(val)) return window.loadInApp('https://' + val, val, 'Standard');
+            $('targetQuery').value = val; window.runGlobalSearch();
+        };
+
+        function briefShell(icon, heading, body) {
+            const b = $('viewerBrief'); b.hidden = false; viewer.kind = 'brief'; $('appFrame').src = 'about:blank';
+            b.innerHTML = `<div class="brief-card"><h2><i class="fa-solid ${icon}"></i> ${esc(heading)}</h2>${body}</div>`; b.scrollTop = 0;
+            b.onclick = ev => {
+                const el = ev.target.closest('[data-act]'); if (!el) return; const a = el.dataset.act;
+                if (a === 'window') window.openAppWindow(el.dataset.url || viewer.url, el.dataset.title);
+                else if (a === 'tab') window.openInTab();
+                else if (a === 'copy') copyText(el.dataset.url || viewer.url);
+                else if (a === 'try') window.loadInApp(viewer.url, viewer.title, viewer.risk, true);
+                else if (a === 'case') window.addResourceToCase(viewer.title, viewer.url);
+                else if (a === 'open') window.loadInApp(el.dataset.url, el.dataset.title, 'Standard');
+                else if (a === 'save') {
+                    const v = ($('briefUrl').value || '').trim(); let ok = false; try { ok = /^https?:$/.test(new URL(v).protocol); } catch (e) {}
+                    if (!ok) return toast('Enter a full http(s) address', 'warn');
+                    customUrls[viewer.title] = v; store.set(LS_URLS, JSON.stringify(customUrls)); window.loadInApp(v, viewer.title, viewer.risk);
+                }
+            };
+        }
+        function showBrief(kind, extra) {
+            const url = viewer.url, host = (() => { try { return hostOf(new URL(url)); } catch (e) { return ''; } })();
+            const riskTag = `<span class="risk-badge ${viewer.risk === 'High Risk' ? 'risk-high' : viewer.risk === 'Sensitive' ? 'risk-sensitive' : 'risk-standard'}">${esc(viewer.risk)}</span>`;
+            if (kind === 'blocked') {
+                briefShell('fa-shield-halved', viewer.title, `<div class="brief-url">${esc(url)} ${riskTag}</div>
+                <p><b>${esc(host)}</b> instructs browsers not to display its pages inside other applications (X-Frame-Options / frame-ancestors). This is a security policy of the website, and this workstation does not bypass it.</p>
+                <p>Open it in the dedicated <b>App Window</b> (a separate application-style window, no tabs or address clutter) and keep working here: capture it to the case file at any time.</p>
+                <div class="brief-actions">
+                    <button class="btn" data-act="window"><i class="fa-solid fa-window-restore"></i> Open in App Window</button>
+                    <button class="btn btn-success" data-act="case"><i class="fa-solid fa-folder-plus"></i> Add to Case</button>
+                    <button class="btn btn-outline" data-act="tab"><i class="fa-solid fa-arrow-up-right-from-square"></i> Browser Tab</button>
+                    <button class="btn btn-outline" data-act="copy"><i class="fa-solid fa-copy"></i> Copy URL</button>
+                    <button class="btn btn-outline" data-act="try"><i class="fa-solid fa-flask"></i> Try Embedded Anyway</button>
+                </div>
+                <div class="brief-note">Provenance: record the capture time and exact URL when you rely on this source.</div>`);
+                if (viewer.risk !== 'High Risk') window.openAppWindow(url, viewer.title);
+            } else if (kind === 'tor') {
+                briefShell('fa-user-secret', viewer.title, `<div class="brief-url">${esc(url)} ${riskTag}</div>
+                <p>Hidden-service (<b>.onion</b>) addresses cannot be reached from a normal browser or embedded frame. Open this address in <b>Tor Browser</b> under your authorised, policy-compliant setup.</p>
+                <div class="brief-actions"><button class="btn" data-act="copy"><i class="fa-solid fa-copy"></i> Copy Address</button>
+                <button class="btn btn-success" data-act="case"><i class="fa-solid fa-folder-plus"></i> Record Observation</button></div>
+                <div class="brief-note">Onion addresses change and are frequently impersonated. Verify against an authoritative source before use, and do not download or ingest leaked credentials.</div>`);
+            } else {
+                briefShell('fa-link', viewer.title || 'Set a destination', `${riskTag}
+                <p>${esc(extra || 'No destination address is configured for this resource yet. Enter the official URL once and it will be remembered for this card.')}</p>
+                <input type="text" id="briefUrl" class="input-field" placeholder="https://..." onkeydown="if(event.key==='Enter') this.parentNode.querySelector('[data-act=save]').click()">
+                <div class="brief-actions"><button class="btn" data-act="save"><i class="fa-solid fa-arrow-right"></i> Save and Open</button></div>
+                <div class="brief-note">Only address resources you are authorised to access and that you have verified.</div>`);
+            }
+        }
+
+        /* ---------- Global query launcher ---------- */
+        window.runGlobalSearch = function () {
+            const q = $('targetQuery').value.trim();
+            if (!q) { toast('Enter a domain, IP, handle, place or coordinates first', 'warn'); $('targetQuery').focus(); return; }
+            showPane(); logAudit('Global query', q);
+            const m = q.match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+            if (m && Math.abs(+m[1]) <= 90 && Math.abs(+m[2]) <= 180)
+                return window.loadInApp(`https://www.google.com/maps?q=${m[1]},${m[2]}&z=15`, 'Coordinates ' + m[1] + ', ' + m[2], 'Standard');
+            showLauncher(q);
+        };
+        function showLauncher(q) {
+            resetFrame(); $('viewerEmpty').classList.add('hidden'); setMeta('Query: ' + q, q); viewer.kind = 'launcher';
+            const e = encodeURIComponent(q), isIP = /^\d{1,3}(\.\d{1,3}){3}$/.test(q), isDomain = !isIP && /^[\w-]+(\.[\w-]+)+$/.test(q);
+            const rows = [
+                ['Map search', 'Locate a place or address', `https://www.google.com/maps?q=${e}`, true],
+                ['Wayback Machine', 'Archived snapshots of this URL or domain', `https://web.archive.org/web/*/${e}`, true],
+                ['Wikipedia', 'Reference article search', `https://en.wikipedia.org/w/index.php?search=${e}`, true],
+                ['Google', 'Web search', `https://www.google.com/search?q=${e}`, false],
+                ['Bing', 'Web search', `https://www.bing.com/search?q=${e}`, false],
+                ['DuckDuckGo', 'Web search', `https://duckduckgo.com/?q=${e}`, false],
+                ['Yandex', 'Web search, strong for image and regional results', `https://yandex.com/search/?text=${e}`, false]
+            ];
+            if (isIP) rows.push(['Shodan', 'Exposed services for this IP', `https://www.shodan.io/host/${e}`, false], ['ARIN / RDAP', 'Registry allocation data', `https://rdap.org/ip/${e}`, true]);
+            if (isDomain) rows.push(['RDAP Domain', 'Registration data', `https://rdap.org/domain/${e}`, true], ['VirusTotal', 'Domain reputation', `https://www.virustotal.com/gui/domain/${e}`, false]);
+            briefShell('fa-magnifying-glass', 'Global Query', `<div class="brief-url">${esc(q)}</div>
+                <p>Choose a source. <span class="launch-tag">Embedded</span> opens in this viewer; <span class="launch-tag win">App Window</span> opens in a dedicated window because that site forbids embedding.</p>
+                <div class="launch-list">${rows.map(r => `<div class="launch-row"><div>${esc(r[0])}<span class="launch-tag ${r[3] ? '' : 'win'}">${r[3] ? 'Embedded' : 'App Window'}</span><small>${esc(r[1])}</small></div>
+                <button class="btn btn-outline" style="padding:4px 10px;font-size:.75rem" data-act="${r[3] ? 'open' : 'window'}" data-url="${esc(r[2])}" data-title="${esc(r[0] + ': ' + q)}">Open</button></div>`).join('')}</div>`);
+            viewer.kind = 'launcher';
+        }
+
+        /* ---------- Case capture ---------- */
+        window.addResourceToCase = function (name, url) {
+            if (REG[name]) url = REG[name];
+            $('addResName').value = name || ''; $('addResUrl').value = url || ''; $('addResNotes').value = '';
+            $('addToCaseModal').style.display = 'flex'; setTimeout(() => $('addResNotes').focus(), 50);
+        };
+        window.confirmAddToCase = function () {
+            window.addEvidenceItem($('addResUrl').value, 'Source Obs: ' + $('addResName').value, $('addResNotes').value);
+            closeModal('addToCaseModal'); toast('Observation recorded to active case file');
+        };
+        window.quickClipToCase = function () {
+            if (viewer.url && /^https?:/i.test(viewer.url)) window.addResourceToCase(viewer.title, viewer.url);
+            else toast('Open a resource in the viewer first', 'warn');
+        };
+
+        /* ---------- In-app modules (replace "backend" alerts) ---------- */
+        const fmt = d => new Date(d).toLocaleString();
+        const MODULES = {
+            'Dashboard': () => {
+                const ev = activeCase().evidence || [], hi = audit.filter(a => a.action === 'High-risk access confirmed').length;
+                return `<h2>Dashboard</h2><div class="sub">Active case: ${esc(activeCase().title)} (${esc(activeCase().id)})</div>
+                <div class="stat-grid"><div class="stat"><b>${cases.length}</b><span>Cases</span></div><div class="stat"><b>${ev.length}</b><span>Evidence items</span></div>
+                <div class="stat"><b>${audit.filter(a => a.action === 'Resource opened').length}</b><span>Resources opened</span></div><div class="stat"><b>${hi}</b><span>High-risk confirmations</span></div></div>
+                <div class="case-card-panel"><div class="panel-header"><div class="panel-title"><i class="fa-solid fa-bolt"></i> Quick Launch</div></div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn btn-outline" onclick="filterCategory('osint')">OSINT</button><button class="btn btn-outline" onclick="filterCategory('transport')">Transport &amp; Maritime</button><button class="btn btn-outline" onclick="filterCategory('cctv')">CCTV</button><button class="btn btn-outline" onclick="filterCategory('locations')">Locations &amp; Maps</button><button class="btn btn-outline" onclick="filterCategory('news')">News</button><button class="btn btn-outline" onclick="filterCategory('darkweb')">Dark &amp; Deep Web</button></div></div>
+                <div class="case-card-panel" style="margin-top:14px"><div class="panel-header"><div class="panel-title"><i class="fa-solid fa-clock-rotate-left"></i> Recent Activity</div></div>${auditTable(audit.slice(0, 8))}</div>`;
+            },
+            'Subjects & Entities': () => {
+                const c = activeCase(), split = s => (s || '').split(',').map(x => x.trim()).filter(Boolean);
+                const rows = [].concat(split(c.primarySuspect).map(n => [n, 'Primary Target']), split(c.accomplices).map(n => [n, 'Associated Entity']), split(c.otherSuspects).map(n => [n, 'Other Subject / POI']));
+                const count = t => (c.evidence || []).filter(e => e.entity === t).length;
+                return `<h2>Subjects &amp; Entities</h2><div class="sub">Maintained from the Overview tab of the active case.</div>
+                <div class="case-card-panel">${rows.length ? `<table class="evidence-table"><thead><tr><th>Name / Alias</th><th>Role</th><th>Linked evidence</th></tr></thead><tbody>${rows.map(r => `<tr><td><strong>${esc(r[0])}</strong></td><td>${esc(r[1])}</td><td>${r[1] === 'Primary Target' ? count('Primary Target') : r[1] === 'Associated Entity' ? count('Associated Entity') : '-'}</td></tr>`).join('')}</tbody></table>` : '<p style="color:var(--text-muted);font-size:.85rem">No subjects recorded. Add them under Cases &rarr; Overview &amp; Subjects.</p>'}
+                <button class="btn" style="margin-top:14px" onclick="switchMainView('case-studio');switchCaseTab('tab-overview')">Edit subjects</button></div>`;
+            },
+            'Timeline': () => {
+                const items = (activeCase().evidence || []).map(e => ({ t: e.timestamp, a: 'Evidence', d: e.title + ' | ' + e.url })).concat(audit.map(a => ({ t: a.t, a: a.action, d: a.detail }))).sort((x, y) => new Date(y.t) - new Date(x.t));
+                return `<h2>Timeline</h2><div class="sub">Evidence and activity in reverse chronological order.</div><div class="case-card-panel">${items.length ? `<table class="evidence-table"><thead><tr><th>Time</th><th>Event</th><th>Detail</th></tr></thead><tbody>${items.slice(0, 200).map(i => `<tr><td style="white-space:nowrap">${esc(fmt(i.t))}</td><td>${esc(i.a)}</td><td style="word-break:break-all">${esc(i.d)}</td></tr>`).join('')}</tbody></table>` : '<p style="color:var(--text-muted)">No activity yet.</p>'}</div>`;
+            },
+            'Reports': () => `<h2>Reports</h2><div class="sub">Executive summary of the active case, generated from recorded data.</div>
+                <div style="display:flex;gap:8px;margin-bottom:14px"><button class="btn" onclick="downloadReport()"><i class="fa-solid fa-download"></i> Download (HTML)</button><button class="btn btn-outline" onclick="window.print()"><i class="fa-solid fa-print"></i> Print</button></div><div class="report-preview">${reportHtml()}</div>`,
+            'Audit Log': () => `<h2>Audit Log</h2><div class="sub">Append-only record of resource access and case actions on this device.</div>
+                <button class="btn btn-outline" style="margin-bottom:14px" onclick="exportAudit()"><i class="fa-solid fa-file-csv"></i> Export CSV</button><div class="case-card-panel">${auditTable(audit.slice(0, 200))}</div>`,
+            'Settings': () => `<h2>Settings</h2><div class="sub">Preferences are stored locally in this browser.</div>
+                <div class="case-card-panel"><div class="form-group" style="max-width:320px"><label>Screen density</label><select class="input-field" onchange="changeDensity(this.value)">${['compact', 'comfortable', 'large'].map(d => `<option value="${d}" ${document.body.className === 'density-' + d ? 'selected' : ''}>${d[0].toUpperCase() + d.slice(1)}</option>`).join('')}</select></div>
+                <div style="margin-top:18px"><button class="btn btn-danger" onclick="resetWorkspace()"><i class="fa-solid fa-trash"></i> Reset all local workspace data</button></div></div>`
+        };
+        function auditTable(list) {
+            return list.length ? `<table class="evidence-table"><thead><tr><th>Time</th><th>Action</th><th>Detail</th></tr></thead><tbody>${list.map(a => `<tr><td style="white-space:nowrap">${esc(fmt(a.t))}</td><td>${esc(a.action)}</td><td style="word-break:break-all;color:var(--text-muted)">${esc(a.detail)}</td></tr>`).join('')}</tbody></table>` : '<p style="color:var(--text-muted);font-size:.85rem">No activity recorded yet.</p>';
+        }
+        function reportHtml() {
+            const c = activeCase(), ev = c.evidence || [];
+            return `<h2 style="color:#0f172a;font-size:1.2rem">Executive Summary: ${esc(c.title)}</h2><div>Case ID ${esc(c.id)} | Generated ${esc(fmt(new Date()))}</div>
+            <h3>Subjects</h3><div>Primary: ${esc(c.primarySuspect || 'N/A')}<br>Associated: ${esc(c.accomplices || 'N/A')}<br>Other: ${esc(c.otherSuspects || 'N/A')}</div>
+            <h3>Objectives &amp; Notes</h3><div>${esc(c.caseNotes || 'None recorded.').replace(/\n/g, '<br>')}</div>
+            <h3>Evidence Registry (${ev.length})</h3>${ev.length ? `<table><thead><tr><th>Confidence</th><th>Source</th><th>Entity</th><th>Notes</th><th>Recorded</th></tr></thead><tbody>${ev.map(e => `<tr><td>${esc(e.flag)}</td><td>${esc(e.title)}<br>${esc(e.url)}</td><td>${esc(e.entity)}</td><td>${esc(e.notes || '')}</td><td>${esc(fmt(e.timestamp))}</td></tr>`).join('')}</tbody></table>` : '<div>No evidence recorded.</div>'}`;
+        }
+        window.downloadReport = function () {
+            download('osint-report-' + activeCase().id + '.html', '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Report</title><style>body{font-family:Segoe UI,Arial,sans-serif;max-width:900px;margin:30px auto;color:#111827}td,th{border:1px solid #d1d5db;padding:5px 8px;text-align:left;font-size:13px}table{border-collapse:collapse;width:100%}</style></head><body>' + reportHtml() + '</body></html>', 'text/html');
+            logAudit('Report generated');
+        };
+        window.exportAudit = function () {
+            const q = s => '"' + String(s).replace(/"/g, '""') + '"';
+            download('osint-audit-log.csv', 'time,case,action,detail\n' + audit.map(a => [a.t, a.case, a.action, a.detail].map(q).join(',')).join('\n'), 'text/csv');
+        };
+        window.resetWorkspace = function () {
+            if (!confirm('Delete all local cases, evidence and audit history on this device?')) return;
+            [LS_CASES, LS_AUDIT, LS_URLS].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+            cases = [newCase()]; audit = []; customUrls = {}; saveAll(); updateCaseUI(); renderEvidence(); window.showPlaceholder('Settings'); toast('Workspace reset');
+        };
+        window.showPlaceholder = function (name) {
+            if (!MODULES[name]) return;
+            const el = [...document.querySelectorAll('.nav-item')].find(n => n.textContent.replace(/\s+/g, ' ').trim() === name);
+            setNav(el); $('moduleView').innerHTML = MODULES[name](); showView('moduleView'); $('moduleView').scrollTop = 0;
+        };
+
+        /* ---------- News & Open Sources directory ---------- */
+        const NEWS_RAW = `
+International|International organisations|United Nations (UN News)|O|news.un.org
+International|International organisations|European Union (Press Corner)|O|ec.europa.eu/commission/presscorner
+International|International organisations|African Union|O|au.int
+International|International organisations|ASEAN|O|asean.org
+International|International organisations|NATO|O|nato.int
+International|International organisations|World Health Organization|O|who.int
+International|International organisations|IMF|O|imf.org
+International|International organisations|World Bank|O|worldbank.org
+International|International organisations|WTO|O|wto.org
+International|International organisations|OECD|O|oecd.org
+International|International organisations|Council of Europe|O|coe.int
+International|International organisations|OSCE|O|osce.org
+International|International organisations|Organization of American States|O|oas.org
+International|International organisations|League of Arab States|O|lasportal.org
+International|International organisations|OIC|O|oic-oci.org
+International|International organisations|Commonwealth|O|thecommonwealth.org
+International|International organisations|SADC|O|sadc.int
+International|International organisations|ECOWAS|O|ecowas.int
+International|International organisations|EAC|O|eac.int
+International|International organisations|Pacific Islands Forum|O|forumsec.org
+International|International organisations|ICRC|O|icrc.org
+International|Global wire agencies|Reuters|G|reuters.com
+International|Global wire agencies|Associated Press|G|apnews.com
+International|Global wire agencies|AFP|G|afp.com
+Africa|Algeria|APS|A|aps.dz
+Africa|Angola|ANGOP|A|angop.ao
+Africa|Benin|ABP|A|abp.bj
+Africa|Botswana|BOPA|A|bopa.co.bw
+Africa|Burkina Faso|AIB|A|aib.media
+Africa|Burundi|ABP|A|abp.bi
+Africa|Cabo Verde|Inforpress|A|inforpress.cv
+Africa|Cameroon|CRTV|P|crtv.cm
+Africa|Congo (Rep.)|ADIAC|A|adiac-congo.com
+Africa|DR Congo|ACP|A|acp.cd
+Africa|Côte d'Ivoire|AIP|A|aip.ci
+Africa|Djibouti|ADI|A|adi.dj
+Africa|Egypt|MENA|A|mena.org.eg
+Africa|Eritrea|Shabait|A|shabait.com
+Africa|Ethiopia|ENA|A|ena.et
+Africa|Gabon|AGP|A|agpgabon.ga
+Africa|Gambia|GRTS|P|grts.gm
+Africa|Ghana|GNA|A|gna.org.gh
+Africa|Kenya|KNA|A|kenyanews.go.ke
+Africa|Lesotho|LeNA|A|lena.gov.ls
+Africa|Liberia|LINA|A|lina.gov.lr
+Africa|Libya|LANA|A|lana.gov.ly
+Africa|Malawi|MANA|A|mana.gov.mw
+Africa|Mali|AMAP|A|amap.ml
+Africa|Mauritania|AMI|A|ami.mr
+Africa|Mauritius|GIS|A|gis.govmu.org
+Africa|Morocco|MAP|A|mapnews.ma
+Africa|Mozambique|AIM|A|aimnews.org
+Africa|Namibia|NAMPA|A|nampa.org
+Africa|Niger|ANP|A|anp.ne
+Africa|Nigeria|NAN|A|nannews.ng
+Africa|Rwanda|The New Times|P|newtimes.co.rw
+Africa|Senegal|APS|A|aps.sn
+Africa|Seychelles|Seychelles Nation|P|nation.sc
+Africa|Somalia|SONNA|A|sonna.so
+Africa|South Africa|SAnews|A|sanews.gov.za
+Africa|Sudan|SUNA|A|suna-sd.net
+Africa|Tanzania|Daily News|P|dailynews.co.tz
+Africa|Togo|ATOP|A|republicoftogo.com
+Africa|Tunisia|TAP|A|tap.info.tn
+Africa|Uganda|UBC|P|ubc.go.ug
+Africa|Zambia|ZANIS|A|zanis.co.zm
+Africa|Zimbabwe|ZIANA|A|ziana.co.zw
+Africa|Pan-African|APA News|A|apanews.net
+Asia & Middle East|Afghanistan|Bakhtar|A|bakhtarnews.af
+Asia & Middle East|Armenia|Armenpress|A|armenpress.am
+Asia & Middle East|Azerbaijan|AZERTAC|A|azertag.az
+Asia & Middle East|Bahrain|BNA|A|bna.bh
+Asia & Middle East|Bangladesh|BSS|A|bssnews.net
+Asia & Middle East|Bhutan|Kuensel|P|kuenselonline.com
+Asia & Middle East|Brunei|The Borneo Bulletin|P|borneobulletin.com.bn
+Asia & Middle East|Cambodia|AKP|A|akp.gov.kh
+Asia & Middle East|China|Xinhua|A|english.news.cn
+Asia & Middle East|Cyprus|CNA|A|cna.org.cy
+Asia & Middle East|Georgia|Interpressnews|A|interpressnews.ge
+Asia & Middle East|India|PTI / ANI|A|ptinews.com,aninews.in
+Asia & Middle East|Indonesia|ANTARA|A|antaranews.com
+Asia & Middle East|Iran|IRNA|A|en.irna.ir
+Asia & Middle East|Iraq|INA|A|ina.iq
+Asia & Middle East|Israel|Times of Israel|P|timesofisrael.com
+Asia & Middle East|Japan|Kyodo / Jiji|A|english.kyodonews.net,jiji.com
+Asia & Middle East|Jordan|Petra|A|petra.gov.jo
+Asia & Middle East|Kazakhstan|Kazinform|A|inform.kz
+Asia & Middle East|Kuwait|KUNA|A|kuna.net.kw
+Asia & Middle East|Kyrgyzstan|Kabar|A|kabar.kg
+Asia & Middle East|Laos|KPL|A|kpl.gov.la
+Asia & Middle East|Lebanon|NNA|A|nna-leb.gov.lb
+Asia & Middle East|Malaysia|Bernama|A|bernama.com
+Asia & Middle East|Maldives|PSM News|P|psmnews.mv
+Asia & Middle East|Mongolia|Montsame|A|montsame.mn
+Asia & Middle East|Myanmar|GNLM|P|gnlm.com.mm
+Asia & Middle East|Nepal|RSS|A|rss.com.np
+Asia & Middle East|North Korea|KCNA|A|kcna.kp|R
+Asia & Middle East|Oman|ONA|A|omannews.gov.om
+Asia & Middle East|Pakistan|APP|A|app.com.pk
+Asia & Middle East|Palestine|WAFA|A|wafa.ps|R
+Asia & Middle East|Philippines|PNA|A|pna.gov.ph
+Asia & Middle East|Qatar|QNA|A|qna.org.qa
+Asia & Middle East|Saudi Arabia|SPA|A|spa.gov.sa
+Asia & Middle East|Singapore|The Straits Times|P|straitstimes.com
+Asia & Middle East|South Korea|Yonhap|A|en.yna.co.kr
+Asia & Middle East|Sri Lanka|Daily News|P|dailynews.lk
+Asia & Middle East|Syria|SANA|A|sana.sy|R
+Asia & Middle East|Tajikistan|Khovar|A|khovar.tj
+Asia & Middle East|Thailand|Thai News Agency|A|thainews.prd.go.th
+Asia & Middle East|Timor-Leste|Tatoli|A|tatoli.tl
+Asia & Middle East|Turkey|Anadolu Agency|A|aa.com.tr
+Asia & Middle East|UAE|WAM|A|wam.ae
+Asia & Middle East|Uzbekistan|UzA|A|uza.uz
+Asia & Middle East|Vietnam|VNA|A|vnanet.vn
+Asia & Middle East|Yemen|SABA|A|sabanew.net
+Europe|Albania|ATA|A|ata.gov.al
+Europe|Austria|APA|A|apa.at
+Europe|Belarus|BelTA|A|belta.by
+Europe|Belgium|Belga|A|belga.be
+Europe|Bosnia & Herzegovina|FENA|A|fena.ba
+Europe|Bulgaria|BTA|A|bta.bg
+Europe|Croatia|HINA|A|hina.hr
+Europe|Czechia|ČTK|A|ctk.cz
+Europe|Denmark|Ritzau|A|ritzau.dk
+Europe|Estonia|BNS|A|bns.ee
+Europe|Finland|STT|A|stt.fi
+Europe|France|AFP|A|afp.com
+Europe|Germany|dpa|A|dpa.com
+Europe|Greece|ANA-MPA|A|amna.gr
+Europe|Hungary|MTI|A|mti.hu
+Europe|Iceland|RÚV|P|ruv.is
+Europe|Ireland|RTÉ|P|rte.ie
+Europe|Italy|ANSA|A|ansa.it
+Europe|Kosovo|Kosova Press|A|kosovapress.com
+Europe|Latvia|LETA|A|leta.lv
+Europe|Lithuania|BNS / ELTA|A|bns.lt,elta.lt
+Europe|Luxembourg|Luxemburger Wort|P|wort.lu
+Europe|Malta|Times of Malta|P|timesofmalta.com
+Europe|Moldova|Moldpres|A|moldpres.md
+Europe|Montenegro|MINA|A|mina.news
+Europe|Netherlands|ANP|A|anp.nl
+Europe|North Macedonia|MIA|A|mia.mk
+Europe|Norway|NTB|A|ntb.no
+Europe|Poland|PAP|A|pap.pl
+Europe|Portugal|Lusa|A|lusa.pt
+Europe|Romania|Agerpres|A|agerpres.ro
+Europe|Russia|TASS|A|tass.com
+Europe|Serbia|Tanjug|A|tanjug.rs
+Europe|Slovakia|TASR|A|tasr.sk
+Europe|Slovenia|STA|A|sta.si
+Europe|Spain|EFE|A|efe.com
+Europe|Sweden|TT|A|tt.se
+Europe|Switzerland|Keystone-SDA|A|keystone-sda.ch
+Europe|Ukraine|Ukrinform|A|ukrinform.net
+Europe|United Kingdom|PA Media|A|pa.media
+Europe|United Kingdom|BBC News|P|bbc.com/news
+Europe|Vatican|Vatican News|A|vaticannews.va
+Americas|Argentina|Noticias Argentinas|A|noticiasargentinas.com
+Americas|Bolivia|ABI|A|abi.bo
+Americas|Brazil|Agência Brasil|A|agenciabrasil.ebc.com.br
+Americas|Canada|The Canadian Press|A|thecanadianpress.com
+Americas|Colombia|El Tiempo|P|eltiempo.com
+Americas|Cuba|Prensa Latina|A|prensa-latina.cu
+Americas|Ecuador|Andes|A|andes.info.ec
+Americas|Guatemala|AGN|A|agn.gt
+Americas|Jamaica|JIS|A|jis.gov.jm
+Americas|Paraguay|IP|A|ip.gov.py
+Americas|Peru|Andina|A|andina.pe
+Americas|United States|Associated Press|A|apnews.com
+Americas|Venezuela|AVN|A|avn.info.ve
+Americas|Regional services|EFE (Latin America)|A|efe.com
+Americas|Regional services|CMC (Caribbean)|A|caribbeanmedia.com
+Oceania|Australia|AAP|A|aap.com.au
+Oceania|New Zealand|RNZ|P|rnz.co.nz
+Oceania|Fiji|FBC News|P|fbcnews.com.fj
+Oceania|Papua New Guinea|Post-Courier|P|postcourier.com.pg
+`;
+        const NEWS_REGIONS = ['International', 'Africa', 'Asia & Middle East', 'Europe', 'Americas', 'Oceania'];
+        const NEWS_REGION_ICON = { 'International': 'fa-earth-americas', 'Africa': 'fa-earth-africa', 'Asia & Middle East': 'fa-earth-asia', 'Europe': 'fa-earth-europe', 'Americas': 'fa-earth-americas', 'Oceania': 'fa-globe' };
+        const NEWS_TYPE = { A: 'Wire / State Agency', P: 'Broadcaster / Newspaper', O: 'Organisation', G: 'Global Wire' };
+        const NEWS_NOTES = {
+            'Africa': 'Not listed: Chad, Central African Republic, Comoros, Equatorial Guinea, Eswatini, Guinea, Guinea-Bissau, Madagascar, São Tomé and Príncipe, Sierra Leone and South Sudan, because no stable agency site was confirmed. APA News is listed as a pan-African service.',
+            'Asia & Middle East': 'Turkmenistan: no reliable site could be confirmed. KCNA, SANA and WAFA are often blocked or restricted from some regions.',
+            'Europe': 'Andorra, Liechtenstein, Monaco and San Marino have no major national agency.',
+            'Americas': 'Argentina: the state agency Télam was shut down in 2024, so Noticias Argentinas is listed. Mexico: Notimex was dissolved in 2023, so no agency is listed. For Central America, the Caribbean, Chile, Uruguay and smaller states, use the regional services EFE or CMC.',
+            'Oceania': 'Smaller Pacific states are not listed; the Pacific Islands Forum is under International organisations.'
+        };
+        const NEWS = NEWS_RAW.trim().split('\n').map((line, id) => {
+            const p = line.split('|');
+            return { id, region: p[0], country: p[1], agency: p[2], type: p[3], urls: p[4].split(','), restricted: p[5] === 'R' };
+        });
+        let newsOverrides = parseJSON(store.get('osint_workstation_news_links'), {});
+        const newsUrl = (e, i) => newsOverrides[e.id + ':' + i] || ('https://' + e.urls[i]);
+        const newsLabel = u => u.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '');
+        const newsTitle = e => (e.region === 'International' || e.country === e.agency) ? e.agency : e.country + ': ' + e.agency;
+        const norm = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+        function newsFill(sel, items, firstLabel, keep) {
+            sel.innerHTML = '<option value="">' + firstLabel + '</option>' + items.map(i => '<option value="' + esc(i) + '">' + esc(i) + '</option>').join('');
+            if (keep && items.indexOf(keep) > -1) sel.value = keep;
+        }
+        function newsRefreshCountries() {
+            const region = $('newsRegion').value, cur = $('newsCountry').value;
+            const list = [...new Set(NEWS.filter(e => !region || e.region === region).map(e => e.country))].sort((a, b) => a.localeCompare(b));
+            newsFill($('newsCountry'), list, region ? 'All countries in region' : 'All countries / bodies', cur);
+        }
+        function renderNews() {
+            const q = norm($('newsSearch').value.trim()), region = $('newsRegion').value, country = $('newsCountry').value, type = $('newsType').value;
+            const hits = NEWS.filter(e => (!region || e.region === region) && (!country || e.country === country) && (!type || e.type === type) &&
+                (!q || norm(e.country + ' ' + e.agency + ' ' + e.urls.join(' ') + ' ' + e.region).indexOf(q) > -1));
+            $('newsCount').textContent = hits.length + ' of ' + NEWS.length + ' sources';
+            const box = $('newsDirectory');
+            if (!hits.length) { box.innerHTML = '<div class="news-empty"><i class="fa-solid fa-magnifying-glass"></i>No sources match these filters.</div>'; $('newsCoverage').innerHTML = ''; return; }
+            const regions = NEWS_REGIONS.filter(r => hits.some(e => e.region === r));
+            box.innerHTML = regions.map(r => {
+                const rows = hits.filter(e => e.region === r).sort((a, b) => a.country.localeCompare(b.country) || a.agency.localeCompare(b.agency));
+                return '<div class="news-region"><i class="fa-solid ' + NEWS_REGION_ICON[r] + '" style="color:var(--accent-cyan)"></i> ' + esc(r) + ' <small>' + rows.length + '</small></div><div class="tool-grid">' +
+                    rows.map(e => {
+                        const multi = e.urls.length > 1;
+                        const chips = e.urls.map((_, i) => { const u = newsUrl(e, i); return '<button type="button" class="news-chip' + (newsOverrides[e.id + ':' + i] ? ' custom' : '') + '" data-id="' + e.id + '" data-i="' + i + '" data-act="open" title="Open in viewer"><i class="fa-solid fa-arrow-up-right-from-square"></i>' + esc(newsLabel(u)) + '</button>'; }).join('');
+                        return '<div class="tool-card news-card"><div class="tool-header"><div class="tool-title"><i class="fa-solid fa-newspaper"></i> ' + esc(e.agency) + '</div><span><span class="nb nb-' + e.type + '">' + NEWS_TYPE[e.type] + '</span>' + (e.restricted ? '<span class="nb nb-R" title="Often blocked or restricted from some regions">May be blocked</span>' : '') + '</span></div>' +
+                            '<div class="news-country">' + esc(e.country) + '</div><div class="news-links">' + chips + '</div>' +
+                            '<div class="tool-actions"><button type="button" class="tool-action-btn" data-id="' + e.id + '" data-i="0" data-act="open">Open' + (multi ? ' first' : '') + ' <i class="fa-solid fa-arrow-right"></i></button>' +
+                            '<span style="display:flex;gap:10px"><button type="button" class="tool-action-btn" data-id="' + e.id + '" data-i="0" data-act="case" title="Add to case"><i class="fa-solid fa-folder-plus"></i> Add to Case</button>' +
+                            '<button type="button" class="tool-action-btn" data-id="' + e.id + '" data-act="edit" title="Edit link" aria-label="Edit link"><i class="fa-solid fa-pen"></i> Edit</button></span></div></div>';
+                    }).join('') + '</div>';
+            }).join('');
+            const notes = regions.filter(r => NEWS_NOTES[r]);
+            $('newsCoverage').innerHTML = notes.length ? '<details><summary>Coverage notes</summary><ul>' + notes.map(r => '<li><b>' + esc(r) + ':</b> ' + esc(NEWS_NOTES[r]) + '</li>').join('') + '</ul></details>' : '';
+        }
+        function openEditLink(e) {
+            $('editLinkTitle').textContent = 'Edit link: ' + e.agency;
+            $('editLinkBody').innerHTML = e.urls.map((_, i) => '<div class="edit-row"><label for="editUrl' + i + '">' + esc(e.urls.length > 1 ? 'Link ' + (i + 1) : 'Website address') + '</label><input type="text" class="input-field" id="editUrl' + i + '" value="' + esc(newsUrl(e, i)) + '"></div>').join('');
+            const save = () => {
+                let bad = false;
+                e.urls.forEach((_, i) => {
+                    let v = $('editUrl' + i).value.trim(); if (!v) return;
+                    if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
+                    try { new URL(v); } catch (x) { bad = true; return; }
+                    if (v === 'https://' + e.urls[i]) delete newsOverrides[e.id + ':' + i]; else newsOverrides[e.id + ':' + i] = v;
+                });
+                if (bad) return toast('One of the addresses is not valid', 'warn');
+                store.set('osint_workstation_news_links', JSON.stringify(newsOverrides)); closeModal('editLinkModal'); renderNews(); toast('Link updated'); logAudit('News link edited', e.agency);
+            };
+            $('editLinkSave').onclick = save;
+            $('editLinkReset').onclick = () => { e.urls.forEach((_, i) => delete newsOverrides[e.id + ':' + i]); store.set('osint_workstation_news_links', JSON.stringify(newsOverrides)); closeModal('editLinkModal'); renderNews(); toast('Link reset to default'); };
+            $('editLinkModal').style.display = 'flex'; setTimeout(() => $('editUrl0').focus(), 50);
+        }
+        function initNews() {
+            newsFill($('newsRegion'), NEWS_REGIONS, 'All regions'); newsRefreshCountries();
+            let t; $('newsSearch').addEventListener('input', () => { clearTimeout(t); t = setTimeout(renderNews, 120); });
+            $('newsRegion').addEventListener('change', () => { newsRefreshCountries(); renderNews(); });
+            $('newsCountry').addEventListener('change', renderNews); $('newsType').addEventListener('change', renderNews);
+            $('newsClear').addEventListener('click', () => { $('newsSearch').value = ''; $('newsRegion').value = ''; $('newsType').value = ''; newsRefreshCountries(); $('newsCountry').value = ''; renderNews(); });
+            $('newsDirectory').addEventListener('click', ev => {
+                const b = ev.target.closest('[data-act]'); if (!b) return;
+                const e = NEWS[+b.dataset.id], i = +(b.dataset.i || 0); if (!e) return;
+                const title = e.urls.length > 1 ? newsTitle(e) + ' (' + e.urls[i] + ')' : newsTitle(e);
+                if (b.dataset.act === 'open') window.openResource(newsUrl(e, i), title, 'Standard');
+                else if (b.dataset.act === 'case') window.addResourceToCase(newsTitle(e), newsUrl(e, i));
+                else if (b.dataset.act === 'edit') openEditLink(e);
+            });
+            renderNews();
+        }
+
+
+        /* ---------- Tool catalogue (Transport, CCTV, Locations & Maps) ---------- */
+        const r5 = n => (+n).toFixed(5);
+        const sunStamp = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + '/' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+        const G_AV = 'Aviation & Aircraft Intelligence', G_MAR = 'Maritime & Vessel Intelligence', G_RR = 'Road & Rail Transport Intelligence',
+              G_CAM = 'Public Webcam Directories', G_MAP = 'Maps & Imagery', G_SUN = 'Sun & Shadow Analysis Tools', G_TER = 'Terrain, Infrastructure & Specialized Maps';
+        const TOOLS = [
+            // Aviation
+            { cat: 'transport', group: G_AV, name: 'FlightRadar24', icon: 'fa-plane', desc: 'Live global flight tracking with aircraft, route and airport detail.', url: 'https://www.flightradar24.com/-15.41,28.29/6', loc: l => `https://www.flightradar24.com/${r5(l.lat)},${r5(l.lon)}/9` },
+            { cat: 'transport', group: G_AV, name: 'FlightAware', icon: 'fa-plane-circle-check', desc: 'Live flight status, airport activity and historical flight data.', url: 'https://www.flightaware.com/live/' },
+            { cat: 'transport', group: G_AV, name: 'PlaneFinder', icon: 'fa-plane-up', desc: 'Real-time ADS-B aircraft tracking on an interactive map.', url: 'https://planefinder.net/', loc: l => `https://planefinder.net/@${r5(l.lat)},${r5(l.lon)},9z` },
+            { cat: 'transport', group: G_AV, name: 'ADS-B Exchange', icon: 'fa-satellite-dish', desc: 'Unfiltered community ADS-B feed, including aircraft hidden elsewhere.', url: 'https://globe.adsbexchange.com/' },
+            { cat: 'transport', group: G_AV, name: 'OpenSky Network', icon: 'fa-tower-broadcast', desc: 'Open research-grade ADS-B and flight data network.', url: 'https://map.opensky-network.org/' },
+            { cat: 'transport', group: G_AV, name: 'Aviationstack', icon: 'fa-database', desc: 'Aviation data API: flights, airports and airlines.', url: 'https://aviationstack.com/' },
+            { cat: 'transport', group: G_AV, name: 'FAA Resources', icon: 'fa-landmark', desc: 'US aircraft registry and aviation authority resources.', url: 'https://www.faa.gov/' },
+            { cat: 'transport', group: G_AV, name: 'EUROCONTROL', icon: 'fa-earth-europe', desc: 'European air traffic management information.', url: 'https://www.eurocontrol.int/' },
+            // Maritime
+            { cat: 'transport', group: G_MAR, name: 'Marine Traffic', icon: 'fa-ship', desc: 'Global AIS vessel positions, ports and voyage history.', url: 'https://www.marinetraffic.com/en/ais/home/centerx:-12.0/centery:25.0/zoom:4', loc: l => `https://www.marinetraffic.com/en/ais/home/centerx:${r5(l.lon)}/centery:${r5(l.lat)}/zoom:9` },
+            { cat: 'transport', group: G_MAR, name: 'Vessel Finder', icon: 'fa-anchor', desc: 'Live AIS vessel tracking, port calls and vessel particulars.', url: 'https://www.vesselfinder.com/' },
+            { cat: 'transport', group: G_MAR, name: 'My ShipTracking', icon: 'fa-sailboat', desc: 'AIS vessel tracking, fleets and port information.', url: 'https://www.myshiptracking.com/' },
+            { cat: 'transport', group: G_MAR, name: 'Global Fishing Watch', icon: 'fa-fish', desc: 'Public map of fishing activity, vessel behaviour and protected areas.', url: 'https://globalfishingwatch.org/platform/map?latitude=19&longitude=26&zoom=1.49', loc: l => `https://globalfishingwatch.org/platform/map?latitude=${r5(l.lat)}&longitude=${r5(l.lon)}&zoom=6` },
+            { cat: 'transport', group: G_MAR, name: 'FleetMon', icon: 'fa-ferry', desc: 'Legacy vessel tracking site (now part of Kpler).', url: 'https://www.fleetmon.com/' },
+            // Road & Rail
+            { cat: 'transport', group: G_RR, name: 'Open Railway Map', icon: 'fa-train', desc: 'OpenStreetMap-based map of railway infrastructure, tracks, signals and speed limits.', url: 'https://www.openrailwaymap.org/', loc: l => `https://www.openrailwaymap.org/?lat=${r5(l.lat)}&lon=${r5(l.lon)}&zoom=11` },
+            { cat: 'transport', group: G_RR, name: 'TomTom Traffic Index', icon: 'fa-gauge-high', desc: 'City-level congestion rankings and traffic trends worldwide.', url: 'https://www.tomtom.com/traffic-index/' },
+            { cat: 'transport', group: G_RR, name: 'Waze Map', icon: 'fa-car-burst', desc: 'Live crowd-sourced traffic, incidents, closures and hazards.', url: 'https://www.waze.com/live-map', loc: l => `https://www.waze.com/live-map?zoom=12&lat=${r5(l.lat)}&lon=${r5(l.lon)}` },
+            // Webcams
+            { cat: 'cctv', group: G_CAM, name: 'EarthCam', icon: 'fa-video', desc: 'Searchable network of public live webcams, city views and landmarks.', url: 'https://www.earthcam.com/search/ft-search.php?term=', loc: l => 'https://www.earthcam.com/search/ft-search.php?term=' + encodeURIComponent(l.name) },
+            { cat: 'cctv', group: G_CAM, name: 'Skyline Webcam', icon: 'fa-mountain-city', desc: 'Live HD webcams of tourist destinations, coasts and cities.', url: 'https://www.skylinewebcams.com/' },
+            { cat: 'cctv', group: G_CAM, name: 'World Cam', icon: 'fa-earth-africa', desc: 'Directory of live webcams organised by country and region.', url: 'https://worldcam.eu/' },
+            { cat: 'cctv', group: G_CAM, name: 'WebcamTaxi', icon: 'fa-camera', desc: 'Public webcams worldwide with country and category browsing.', url: 'https://www.webcamtaxi.com/en/' },
+            { cat: 'cctv', group: G_CAM, name: 'Global Public Cam Map', icon: 'fa-map-location', desc: 'Windy map interface for explicitly public tourism, weather and city webcams.', url: 'https://www.windy.com/webcams' },
+            // Maps & imagery
+            { cat: 'locations', group: G_MAP, name: 'Google Earth', icon: 'fa-earth-americas', desc: '3D globe with satellite imagery, terrain and historical views.', url: 'https://earth.google.com/web/search/', loc: l => `https://earth.google.com/web/@${r5(l.lat)},${r5(l.lon)},0a,5000d,35y,0h,0t,0r` },
+            { cat: 'locations', group: G_MAP, name: 'Google Map', icon: 'fa-map-pin', desc: 'Place search, satellite view, routes and business listings.', url: 'https://www.google.com/maps/place/', loc: l => `https://www.google.com/maps/place/${encodeURIComponent(l.name)}/@${r5(l.lat)},${r5(l.lon)},14z` },
+            { cat: 'locations', group: G_MAP, name: 'Street View (Mapillary)', icon: 'fa-street-view', desc: 'Crowd-sourced street-level imagery for ground-truth verification.', url: 'https://www.mapillary.com/app/?', loc: l => `https://www.mapillary.com/app/?lat=${r5(l.lat)}&lng=${r5(l.lon)}&z=16` },
+            { cat: 'locations', group: G_MAP, name: 'Yandex Map', icon: 'fa-location-dot', desc: 'Alternative mapping and imagery, strong for Russia, CIS and Eastern Europe.', url: 'https://yandex.com/maps/?ll=10.854186%2C49.182076&z=4', loc: l => `https://yandex.com/maps/?ll=${r5(l.lon)}%2C${r5(l.lat)}&z=12` },
+            // Sun & shadow
+            { cat: 'locations', group: G_SUN, name: 'SunCalc', icon: 'fa-sun', desc: 'Sun position, sunrise/sunset and shadow direction for any time and place (chronolocation).', url: () => `https://www.suncalc.org/#/27.6936,-97.5195,3/${sunStamp()}/1/3`, loc: l => `https://www.suncalc.org/#/${r5(l.lat)},${r5(l.lon)},15/${sunStamp()}/1/3` },
+            { cat: 'locations', group: G_SUN, name: 'ShadowMap', icon: 'fa-cloud-sun', desc: '3D sun and shadow simulation over terrain and buildings.', url: 'https://app.shadowmap.org/?lat=-15.65533&lng=27.18450&zoom=15.00', loc: l => `https://app.shadowmap.org/?lat=${r5(l.lat)}&lng=${r5(l.lon)}&zoom=15.00` },
+            { cat: 'locations', group: G_SUN, name: 'ShadeMap', icon: 'fa-umbrella-beach', desc: 'Shadow map for any date and time to test claimed photo or video times.', url: 'https://shademap.app/@-15.74451,28.17552,12.18906z', loc: l => `https://shademap.app/@${r5(l.lat)},${r5(l.lon)},15z` },
+            // Terrain & infrastructure
+            { cat: 'locations', group: G_TER, name: 'OpenStreetMap', icon: 'fa-map', desc: 'Open community map: roads, buildings, land use and points of interest.', url: 'https://www.openstreetmap.org/#map=6/-13.20/27.85', loc: l => `https://www.openstreetmap.org/#map=14/${r5(l.lat)}/${r5(l.lon)}` },
+            { cat: 'locations', group: G_TER, name: 'Open Infrastructure Map', icon: 'fa-bolt', desc: 'Power lines, substations, telecoms, pipelines and water infrastructure.', url: 'https://openinframap.org/#2/26/12', loc: l => `https://openinframap.org/#13/${r5(l.lat)}/${r5(l.lon)}` }
+        ];
+        const TOOL_GROUPS = { transport: [G_AV, G_MAR, G_RR], cctv: [G_CAM], locations: [G_MAP, G_SUN, G_TER] };
+        let loc = null, lastSummary = null;
+        const LS_LOC = 'osint_workstation_location';
+
+        function toolUrl(t) {
+            if (customUrls[t.name]) return customUrls[t.name];
+            if (loc && t.loc) return t.loc(loc);
+            return typeof t.url === 'function' ? t.url() : t.url;
+        }
+        function renderTools() {
+            Object.keys(TOOL_GROUPS).forEach(cat => {
+                const box = $('grp-' + cat); if (!box) return;
+                box.innerHTML = TOOL_GROUPS[cat].map(g => '<h3 class="grp-title">' + esc(g) + '</h3><div class="tool-grid">' +
+                    TOOLS.filter(t => t.cat === cat && t.group === g).map(t => {
+                        const i = TOOLS.indexOf(t);
+                        return '<div class="tool-card"><div class="tool-header"><div class="tool-title"><i class="fa-solid ' + t.icon + '"></i> ' + esc(t.name) + '</div><span class="risk-badge risk-standard">Standard</span></div>' +
+                            '<div class="tool-desc">' + esc(t.desc) + '</div>' +
+                            (t.loc ? '<div class="tool-meta"><span class="geo-tag"><i class="fa-solid fa-location-crosshairs"></i> follows active location</span></div>' : '') +
+                            '<div class="tool-actions"><button type="button" class="tool-action-btn" data-tool="' + i + '" data-act="open">Open <i class="fa-solid fa-arrow-up-right-from-square"></i></button>' +
+                            '<span class="icon-group"><button type="button" class="tool-action-btn" data-tool="' + i + '" data-act="win" title="Open in App Window" aria-label="Open in App Window"><i class="fa-solid fa-window-restore"></i></button>' +
+                            '<button type="button" class="tool-action-btn" data-tool="' + i + '" data-act="copy" title="Copy URL" aria-label="Copy URL"><i class="fa-solid fa-copy"></i></button>' +
+                            '<button type="button" class="tool-action-btn" data-tool="' + i + '" data-act="case" title="Add to case" aria-label="Add to case"><i class="fa-solid fa-folder-plus"></i></button></span></div></div>';
+                    }).join('') + '</div>').join('');
+            });
+        }
+        function renderChips() {
+            const html = loc
+                ? '<div class="loc-chip"><i class="fa-solid fa-location-dot"></i> Active location: <b>' + esc(loc.name) + '</b> <span style="color:var(--text-muted)">(' + r5(loc.lat) + ', ' + r5(loc.lon) + ')</span><button type="button" data-chip="clear">Clear</button></div>'
+                : '<div class="loc-chip off"><i class="fa-solid fa-location-dot"></i> No active location. Set one under Locations &amp; Maps and tools marked "follows active location" will open centred on it.</div>';
+            document.querySelectorAll('.loc-chip-host').forEach(el => { el.innerHTML = html; });
+        }
+        function setLocation(l) {
+            loc = l; store.set(LS_LOC, l ? JSON.stringify(l) : ''); renderChips();
+        }
+        function addToolToCase(name, url) {
+            $('addResName').value = name || ''; $('addResUrl').value = url || ''; $('addResNotes').value = '';
+            $('addToCaseModal').style.display = 'flex'; setTimeout(() => $('addResNotes').focus(), 50);
+        }
+        function initTools() {
+            const saved = parseJSON(store.get(LS_LOC), null);
+            if (saved && isFinite(saved.lat) && isFinite(saved.lon) && saved.name) loc = saved;
+            renderTools(); renderChips();
+            $('toolsView').addEventListener('click', ev => {
+                const chip = ev.target.closest('[data-chip]');
+                if (chip) { setLocation(null); toast('Active location cleared'); return; }
+                const b = ev.target.closest('[data-tool]'); if (!b) return;
+                const t = TOOLS[+b.dataset.tool]; if (!t) return;
+                const url = toolUrl(t);
+                if (b.dataset.act === 'open') window.loadInApp(url, t.name, 'Standard');
+                else if (b.dataset.act === 'win') { window.openAppWindow(url, t.name); logAudit('Resource opened (app window)', t.name + ' | ' + url); }
+                else if (b.dataset.act === 'copy') copyText(url);
+                else if (b.dataset.act === 'case') addToolToCase(t.name, url);
+            });
+        }
+
+        /* ---------- Location summary (OpenStreetMap: Nominatim + Overpass) ---------- */
+        const CATS = [
+            { l: 'Schools', i: 'fa-school', g: 'Education', f: ['["amenity"="school"]'] },
+            { l: 'Colleges & universities', i: 'fa-graduation-cap', g: 'Education', f: ['["amenity"~"^(college|university)$"]'] },
+            { l: 'Kindergartens', i: 'fa-child-reaching', g: 'Education', f: ['["amenity"="kindergarten"]'] },
+            { l: 'Hospitals', i: 'fa-hospital', g: 'Health', f: ['["amenity"="hospital"]', '["healthcare"="hospital"]'] },
+            { l: 'Clinics', i: 'fa-house-medical', g: 'Health', f: ['["amenity"="clinic"]', '["healthcare"="clinic"]', '["amenity"="doctors"]', '["healthcare"="centre"]'] },
+            { l: 'Pharmacies', i: 'fa-prescription-bottle-medical', g: 'Health', f: ['["amenity"="pharmacy"]'] },
+            { l: 'Hotels', i: 'fa-hotel', g: 'Accommodation', f: ['["tourism"="hotel"]'] },
+            { l: 'Lodges & guest houses', i: 'fa-bed', g: 'Accommodation', f: ['["tourism"~"^(guest_house|chalet|motel|hostel)$"]', '["tourism"]["name"~"lodge",i]'] },
+            { l: 'Campsites & caravan sites', i: 'fa-campground', g: 'Accommodation', f: ['["tourism"~"^(camp_site|caravan_site)$"]'] },
+            { l: 'Recreation & sport', i: 'fa-futbol', g: 'Recreation & Tourism', f: ['["leisure"~"^(park|playground|pitch|sports_centre|stadium|golf_course|swimming_pool|garden|recreation_ground|fitness_centre|track|nature_reserve)$"]'] },
+            { l: 'Attractions & viewpoints', i: 'fa-binoculars', g: 'Recreation & Tourism', f: ['["tourism"~"^(attraction|viewpoint|museum|zoo|theme_park|picnic_site|gallery)$"]'] },
+            { l: 'Restaurants, cafes & bars', i: 'fa-utensils', g: 'Commerce & Finance', f: ['["amenity"~"^(restaurant|cafe|fast_food|bar|pub)$"]'] },
+            { l: 'Shops', i: 'fa-store', g: 'Commerce & Finance', f: ['["shop"]'] },
+            { l: 'Markets', i: 'fa-basket-shopping', g: 'Commerce & Finance', f: ['["amenity"="marketplace"]'] },
+            { l: 'Banks & ATMs', i: 'fa-building-columns', g: 'Commerce & Finance', f: ['["amenity"~"^(bank|atm|bureau_de_change)$"]'] },
+            { l: 'Police stations', i: 'fa-shield-halved', g: 'Public Services', f: ['["amenity"="police"]'] },
+            { l: 'Fire stations', i: 'fa-fire-extinguisher', g: 'Public Services', f: ['["amenity"="fire_station"]'] },
+            { l: 'Government offices', i: 'fa-landmark', g: 'Public Services', f: ['["office"="government"]', '["amenity"~"^(townhall|courthouse|post_office)$"]'] },
+            { l: 'Places of worship', i: 'fa-place-of-worship', g: 'Public Services', f: ['["amenity"="place_of_worship"]'] },
+            { l: 'Fuel stations', i: 'fa-gas-pump', g: 'Transport & Utilities', f: ['["amenity"="fuel"]'] },
+            { l: 'Bus stations & stops', i: 'fa-bus', g: 'Transport & Utilities', f: ['["amenity"="bus_station"]', '["highway"="bus_stop"]'] },
+            { l: 'Railway stations', i: 'fa-train-subway', g: 'Transport & Utilities', f: ['["railway"~"^(station|halt)$"]'] },
+            { l: 'Airfields & airports', i: 'fa-plane-arrival', g: 'Transport & Utilities', f: ['["aeroway"~"^(aerodrome|airstrip)$"]'] },
+            { l: 'Water & power facilities', i: 'fa-bolt', g: 'Transport & Utilities', f: ['["man_made"~"^(water_tower|water_well|water_works|wastewater_plant)$"]', '["power"~"^(plant|substation)$"]'] }
+        ];
+        const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+
+        async function overpass(query) {
+            let lastErr = null;
+            for (const ep of OVERPASS) {
+                const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 100000);
+                try {
+                    const res = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: ctl.signal });
+                    clearTimeout(timer);
+                    if (!res.ok) { lastErr = new Error('Overpass returned HTTP ' + res.status); continue; }
+                    const data = await res.json();
+                    if (data.remark && /error|timed out|out of memory/i.test(data.remark) && !(data.elements || []).length) { lastErr = new Error(data.remark); continue; }
+                    return data;
+                } catch (e) { clearTimeout(timer); lastErr = e; }
+            }
+            throw lastErr || new Error('Overpass unavailable');
+        }
+        function scopeOf(L, radiusSel) {
+            if (radiusSel === 'area' && L.osmType && L.osmType !== 'node') {
+                const id = (L.osmType === 'relation' ? 3600000000 : 2400000000) + Number(L.osmId);
+                return { pre: 'area(' + id + ')->.a;', sel: '(area.a)', label: 'Administrative area boundary (OpenStreetMap ' + L.osmType + ' ' + L.osmId + ')' };
+            }
+            const m = radiusSel === 'area' ? 5000 : Number(radiusSel);
+            return { pre: '', sel: '(around:' + m + ',' + L.lat + ',' + L.lon + ')', label: 'Within ' + (m / 1000) + ' km of ' + r5(L.lat) + ', ' + r5(L.lon) };
+        }
+        function countQuery(S) {
+            return '[out:json][timeout:90];\n' + S.pre + '\n' + CATS.map(c => '(' + c.f.map(f => 'nwr' + S.sel + f + ';').join('') + ');out count;').join('\n');
+        }
+        function summaryText(name, counts) {
+            const parts = CATS.map((c, i) => counts[i] ? counts[i].toLocaleString() + ' ' + c.l.toLowerCase() : null).filter(Boolean);
+            return name + ': ' + (parts.length ? parts.join(', ') : 'no mapped facilities found');
+        }
+        async function geocode(q) {
+            const m = q.match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+            if (m && Math.abs(+m[1]) <= 90 && Math.abs(+m[2]) <= 180)
+                return [{ name: 'Coordinates ' + m[1] + ', ' + m[2], full: 'Point location', lat: +m[1], lon: +m[2], osmType: 'node', osmId: 0, kind: 'coordinates' }];
+            const res = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=en&q=' + encodeURIComponent(q));
+            if (!res.ok) throw new Error('Geocoder returned HTTP ' + res.status);
+            const list = await res.json();
+            return list.map(r => ({ name: r.name || String(r.display_name).split(',')[0], full: r.display_name, lat: +r.lat, lon: +r.lon, osmType: r.osm_type, osmId: r.osm_id, kind: (r.category || '') + ':' + (r.type || '') }));
+        }
+        async function runSummary(L) {
+            const radiusSel = $('locScope').value, S = scopeOf(L, radiusSel), box = $('locSummary');
+            box.innerHTML = '<div class="loc-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Counting mapped features in ' + esc(L.name) + '. Large areas can take up to a minute...</div>';
+            try {
+                const data = await overpass(countQuery(S));
+                const counts = (data.elements || []).filter(e => e.type === 'count').map(e => +((e.tags || {}).total || 0));
+                if (counts.length !== CATS.length) throw new Error('Unexpected response from Overpass (' + counts.length + ' of ' + CATS.length + ' counts)');
+                lastSummary = { L, S, counts, t: new Date().toISOString(), text: summaryText(L.name, counts), radiusSel };
+                setLocation({ name: L.name, lat: L.lat, lon: L.lon });
+                renderSummary(); logAudit('Location summary', lastSummary.text);
+            } catch (e) {
+                box.innerHTML = '<div class="sum-card"><b>Could not retrieve the summary.</b><div class="loc-note">' + esc(e.message || e) + '. The area may be too large (try a radius), the public Overpass servers may be busy (try again shortly), or this device may be offline.</div></div>';
+            }
+        }
+        function renderSummary() {
+            const s = lastSummary; if (!s) return;
+            const total = s.counts.reduce((a, b) => a + b, 0), groups = [...new Set(CATS.map(c => c.g))];
+            $('locSummary').innerHTML = '<div class="sum-card"><div class="sum-head"><div><div class="sum-name">' + esc(s.L.name) + '</div>' +
+                '<div class="sum-sub">' + esc(s.S.label) + ' &middot; ' + total.toLocaleString() + ' mapped features &middot; retrieved ' + esc(new Date(s.t).toLocaleString()) + '</div></div>' +
+                '<div class="sum-actions"><button class="btn btn-outline" data-sact="copy"><i class="fa-solid fa-copy"></i> Copy</button><button class="btn btn-outline" data-sact="csv"><i class="fa-solid fa-file-csv"></i> CSV</button>' +
+                '<button class="btn btn-success" data-sact="case"><i class="fa-solid fa-folder-plus"></i> Add to Case</button><button class="btn btn-outline" data-sact="map"><i class="fa-solid fa-map"></i> Map</button></div></div>' +
+                '<div class="sum-line">' + esc(s.text) + '</div>' +
+                (total === 0 && s.radiusSel === 'area' ? '<div class="loc-note" style="margin:0 0 8px">Nothing was found inside this boundary. The result may be a line feature (river, road) or a point; try a radius scope instead.</div>' : '') +
+                groups.map(g => '<div class="sum-group">' + esc(g) + '</div><div class="sum-grid">' + CATS.map((c, i) => c.g !== g ? '' :
+                    '<button type="button" class="sum-tile' + (s.counts[i] ? '' : ' zero') + '" data-cat="' + i + '"><i class="fa-solid ' + c.i + '"></i><b>' + s.counts[i].toLocaleString() + '</b><span>' + esc(c.l) + '</span></button>').join('') + '</div>').join('') +
+                '<div id="locNames"></div>' +
+                '<div class="loc-note">Source: OpenStreetMap contributors via the Overpass API. Counts reflect what volunteers have mapped; coverage varies by country and area and is often incomplete in rural regions, so treat figures as a minimum and verify against official records. Lodges include guest houses, chalets, motels, hostels and any tourism feature with &ldquo;lodge&rdquo; in its name. Select a tile to list the names.</div></div>';
+        }
+        async function showNames(i) {
+            const s = lastSummary, c = CATS[i], box = $('locNames'); if (!s || !c || !s.counts[i]) return;
+            box.innerHTML = '<div class="loc-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading ' + esc(c.l.toLowerCase()) + '...</div>';
+            try {
+                const q = '[out:json][timeout:60];\n' + s.S.pre + '\n(' + c.f.map(f => 'nwr' + s.S.sel + f + ';').join('') + ');out tags center 300;';
+                const els = (await overpass(q)).elements || [];
+                const rows = els.map(e => ({ n: (e.tags || {}).name || '', t: e.tags || {}, lat: e.lat != null ? e.lat : (e.center || {}).lat, lon: e.lon != null ? e.lon : (e.center || {}).lon }))
+                    .sort((a, b) => (!a.n - !b.n) || a.n.localeCompare(b.n));
+                box.innerHTML = '<div class="names-box"><h4>' + esc(c.l) + ' (' + s.counts[i].toLocaleString() + (els.length < s.counts[i] ? ', first ' + els.length + ' shown' : '') + ')</h4>' +
+                    rows.map(r => {
+                        const kind = r.t.amenity || r.t.tourism || r.t.leisure || r.t.shop || r.t.healthcare || r.t.railway || r.t.aeroway || r.t.power || r.t.man_made || r.t.office || '';
+                        return '<div class="name-row"><div>' + esc(r.n || 'Unnamed') + ' <small>' + esc(String(kind).replace(/_/g, ' ')) + (r.t.operator ? ' &middot; ' + esc(r.t.operator) : '') + '</small></div>' +
+                            (r.lat != null ? '<button type="button" data-ll="' + r.lat + ',' + r.lon + '" data-nm="' + esc(r.n || c.l) + '"><i class="fa-solid fa-map-pin"></i> Map</button>' : '') + '</div>';
+                    }).join('') + '</div>';
+                box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } catch (e) { box.innerHTML = '<div class="loc-note">Could not load the list: ' + esc(e.message || e) + '</div>'; }
+        }
+        function summaryCsv() {
+            const s = lastSummary, q = v => '"' + String(v).replace(/"/g, '""') + '"';
+            return ['location,group,category,count,scope,retrieved,source'].concat(CATS.map((c, i) => [s.L.name, c.g, c.l, s.counts[i], s.S.label, s.t, 'OpenStreetMap/Overpass'].map(q).join(','))).join('\n');
+        }
+        function initLocations() {
+            const go = async () => {
+                const q = $('locQuery').value.trim(), cands = $('locCands');
+                if (!q) { toast('Enter a place name or coordinates first', 'warn'); $('locQuery').focus(); return; }
+                cands.innerHTML = '<div class="loc-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Looking up location...</div>';
+                try {
+                    const list = await geocode(q);
+                    if (!list.length) { cands.innerHTML = '<div class="loc-note">No match found. Try a different spelling or add a country, e.g. &ldquo;Kafue, Zambia&rdquo;.</div>'; return; }
+                    window.__locCands = list;
+                    if (list.length === 1) { cands.innerHTML = ''; return runSummary(list[0]); }
+                    cands.innerHTML = '<div class="loc-note" style="margin:0">Several matches. Choose the one you mean:</div>' + list.map((c, i) =>
+                        '<button type="button" class="loc-cand" data-cand="' + i + '">' + esc(c.name) + '<small>' + esc(c.full) + ' &middot; ' + esc(c.kind.replace(/_/g, ' ')) + '</small></button>').join('');
+                } catch (e) { cands.innerHTML = '<div class="loc-note">Lookup failed: ' + esc(e.message || e) + '. Check your connection and try again.</div>'; }
+            };
+            $('locGo').addEventListener('click', go);
+            $('locQuery').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+            $('locCands').addEventListener('click', e => {
+                const b = e.target.closest('[data-cand]'); if (!b) return;
+                const c = (window.__locCands || [])[+b.dataset.cand]; if (!c) return;
+                $('locCands').innerHTML = ''; runSummary(c);
+            });
+            $('locSummary').addEventListener('click', e => {
+                const t = e.target.closest('[data-cat]'); if (t) return showNames(+t.dataset.cat);
+                const ll = e.target.closest('[data-ll]'); if (ll) return window.loadInApp('https://www.google.com/maps?q=' + ll.dataset.ll + '&z=17', ll.dataset.nm, 'Standard');
+                const a = e.target.closest('[data-sact]'); if (!a || !lastSummary) return;
+                const s = lastSummary;
+                if (a.dataset.sact === 'copy') copyText(s.text + ' (OpenStreetMap/Overpass, ' + new Date(s.t).toLocaleString() + ')');
+                else if (a.dataset.sact === 'csv') { download('location-summary-' + s.L.name.replace(/[^\w]+/g, '_') + '.csv', summaryCsv(), 'text/csv'); logAudit('Location summary exported', s.L.name); }
+                else if (a.dataset.sact === 'map') window.loadInApp('https://www.google.com/maps?q=' + s.L.lat + ',' + s.L.lon + '&z=13', s.L.name, 'Standard');
+                else if (a.dataset.sact === 'case') {
+                    const url = s.L.osmId ? 'https://www.openstreetmap.org/' + s.L.osmType + '/' + s.L.osmId : 'https://www.openstreetmap.org/#map=14/' + s.L.lat + '/' + s.L.lon;
+                    window.addEvidenceItem(url, 'Location summary: ' + s.L.name, s.text + ' | Scope: ' + s.S.label + ' | Source: OpenStreetMap/Overpass, retrieved ' + s.t);
+                    toast('Location summary recorded to active case file');
+                }
+            });
+        }
+
+        /* ---------- Init ---------- */
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData(); const d = store.get(LS_DENSITY); if (d && ['compact', 'comfortable', 'large'].includes(d)) window.changeDensity(d);
+            updateCaseUI(); renderEvidence(); initNews(); initTools(); initLocations();
+            const rep = document.querySelector('#tab-reports .btn'); if (rep) rep.setAttribute('onclick', "showPlaceholder('Reports')");
+        });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') ['riskModal', 'addToCaseModal', 'editLinkModal'].forEach(closeModal); });
+    })();
+    </script>
+</body>
+</html>
